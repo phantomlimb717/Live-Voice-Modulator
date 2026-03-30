@@ -61,9 +61,9 @@ The new architecture requires shifting from *playing static files on demand* to 
 *   [x] Wire existing PySide6 buttons to toggle these effects/loops on and off.
 
 ### Phase 3: VST3 Support & Advanced UI
-*   [ ] Add a file picker in the UI to load `.vst3` files.
-*   [ ] Integrate the VST3 plugin into the `pedalboard` chain.
-*   [ ] **Crucial:** Implement the `plugin.show_editor()` method provided by `pedalboard` to open the VST3's native GUI window. Note: This window runs in a separate process/thread handled by the OS/JUCE, so we need to ensure it doesn't block our PySide6 event loop.
+*   [x] Add a file picker in the UI to load `.vst3` files.
+*   [x] Integrate the VST3 plugin into the `pedalboard` chain.
+*   [x] **Crucial:** Implement the `plugin.show_editor()` method provided by `pedalboard` to open the VST3's native GUI window. Note: This window runs in a separate process/thread handled by the OS/JUCE, so we need to ensure it doesn't block our PySide6 event loop.
 
 ### Phase 4: Polish & Performance
 *   [ ] Refine the global hotkey system to map to the new toggle actions instead of one-shot playback.
