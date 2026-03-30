@@ -44,16 +44,22 @@ try:
         import pedalboard
         _pb_reverb_ok = hasattr(pedalboard, 'Reverb')
         _pb_delay_ok = hasattr(pedalboard, 'Delay')
+        _pb_distortion_ok = hasattr(pedalboard, 'Distortion')
+        _pb_bitcrush_ok = hasattr(pedalboard, 'Bitcrush')
     except ImportError as pe:
         print(f"ERROR: Failed to import from pedalboard: {pe}. Effects disabled.")
         pedalboard = None
         _pb_reverb_ok = False
         _pb_delay_ok = False
+        _pb_distortion_ok = False
+        _pb_bitcrush_ok = False
     except Exception as pe_other:
         print(f"ERROR: Unexpected error importing pedalboard: {pe_other}. Effects disabled.")
         pedalboard = None
         _pb_reverb_ok = False
         _pb_delay_ok = False
+        _pb_distortion_ok = False
+        _pb_bitcrush_ok = False
     _AUDIO_LIBS_LOADED = True
     if pedalboard and not hasattr(pedalboard, 'Pedalboard'):
          print("ERROR: Critical 'Pedalboard' class missing from pedalboard library. Effects disabled.")
@@ -62,6 +68,8 @@ except ImportError as e:
      pedalboard = None
      _pb_reverb_ok = False
      _pb_delay_ok = False
+     _pb_distortion_ok = False
+     _pb_bitcrush_ok = False
 
 # --- Hotkeys (Pynput) ---
 _HOTKEY_LIB_LOADED = False
@@ -107,14 +115,18 @@ class SoundButton(QPushButton):
         super().__init__(sound_data.get("name", "Unnamed"), parent)
         self.sound_data = sound_data; self.sound_id = sound_data.get("id")
         self.file_missing = not sound_data.get("file_exists", True)
+        self.is_active = False # Tracks if the effect/loop is currently toggled ON
         self.setMinimumHeight(60); self.update_appearance()
     def set_file_missing(self, is_missing):
         if self.file_missing != is_missing: self.file_missing = is_missing; self.update_appearance()
+    def set_active(self, active):
+        if self.is_active != active: self.is_active = active; self.update_appearance()
     def update_appearance(self):
         base_style = "QPushButton { color: white; border: 1px solid #666; padding: 14px; font-size: 10pt; }"
         pressed_style = "QPushButton:pressed { background-color: #606060; }"
         hover_style = "QPushButton:hover { background-color: #5A5A5A; }"
         if self.file_missing: self.setStyleSheet(base_style + "QPushButton { background-color: #802020; border: 1px solid red; }" + pressed_style + hover_style)
+        elif self.is_active: self.setStyleSheet(base_style + "QPushButton { background-color: #208020; border: 1px solid #00FF00; }" + pressed_style + hover_style)
         else: self.setStyleSheet(base_style + "QPushButton { background-color: #505050; }" + pressed_style + hover_style)
     def contextMenuEvent(self, event):
         main_window = self.window()
@@ -131,15 +143,27 @@ class EditSoundDialog(QDialog):
         volume_layout = QHBoxLayout(); self.volume_slider = QSlider(Qt.Orientation.Horizontal); self.volume_slider.setRange(0, 150); self.volume_slider.setValue(int(self.sound_data_edited.get('volume', 1.0) * 100))
         self.volume_label = QLabel(f"{self.sound_data_edited.get('volume', 1.0):.2f}"); self.volume_slider.valueChanged.connect(lambda val: self.volume_label.setText(f"{val / 100.0:.2f}"))
         volume_layout.addWidget(self.volume_slider); volume_layout.addWidget(self.volume_label); form_layout.addRow("Volume:", volume_layout)
+
+        # Pre/Post Effect Routing
+        self.routing_combo = QComboBox()
+        self.routing_combo.addItem("Mix AFTER Effects (Default)", userData="after")
+        self.routing_combo.addItem("Mix BEFORE Effects", userData="before")
+        current_routing = self.sound_data_edited.get('loop_routing', 'after')
+        self.routing_combo.setCurrentIndex(0 if current_routing == 'after' else 1)
+        form_layout.addRow("Loop Routing:", self.routing_combo)
+
         self.group_combo = QComboBox(); current_group_index = 0
         for i, group in enumerate(self.groups): self.group_combo.addItem(group['name'], userData=group['id']);
         if group['id'] == self.sound_data_edited.get('group_id', 'default'): current_group_index = i
         self.group_combo.setCurrentIndex(current_group_index); form_layout.addRow("Group:", self.group_combo)
+
         self.layout.addLayout(form_layout); self.layout.addWidget(QLabel("--- Effects ---")); self.effects_widgets = {}; effects_layout = QVBoxLayout()
         defined_effects = []
         if _AUDIO_LIBS_LOADED:
             if _pb_reverb_ok: defined_effects.append("Reverb")
             if _pb_delay_ok: defined_effects.append("Delay")
+            if _pb_distortion_ok: defined_effects.append("Distortion")
+            if _pb_bitcrush_ok: defined_effects.append("Bitcrush")
         current_effects_list = self.sound_data_edited.get('effects', [])
         current_effects_map = {fx.get('type'): fx for fx in current_effects_list}
         updated_effects_list = []
@@ -150,6 +174,8 @@ class EditSoundDialog(QDialog):
                 default_params = {}
                 if fx_type == "Reverb": default_params = {"room_size": 0.5}
                 elif fx_type == "Delay": default_params = {"delay_seconds": 0.3, "feedback": 0.4}
+                elif fx_type == "Distortion": default_params = {"drive_db": 25.0}
+                elif fx_type == "Bitcrush": default_params = {"bit_depth": 8.0}
                 updated_effects_list.append({"type": fx_type, "enabled": False, "params": default_params})
         self.sound_data_edited['effects'] = updated_effects_list
         for effect_data in self.sound_data_edited['effects']:
@@ -164,11 +190,17 @@ class EditSoundDialog(QDialog):
                 params_layout.addWidget(QLabel("Delay (s):")); spinbox = QDoubleSpinBox(); spinbox.setRange(0.0, 5.0); spinbox.setSingleStep(0.05); spinbox.setDecimals(2); spinbox.setValue(effect_data.get("params", {}).get("delay_seconds", 0.5)); params_layout.addWidget(spinbox); self.effects_widgets[fx_type]['params']['delay_seconds'] = {'widget': spinbox}
                 params_layout.addWidget(QLabel("Feedback:")); slider_fb = QSlider(Qt.Orientation.Horizontal); slider_fb.setRange(0, 95); slider_fb.setValue(int(effect_data.get("params", {}).get("feedback", 0.3) * 100)); label_fb = QLabel(f"{slider_fb.value()/100.0:.2f}")
                 slider_fb.valueChanged.connect(lambda val, l=label_fb: l.setText(f"{val/100.0:.2f}")); params_layout.addWidget(slider_fb); params_layout.addWidget(label_fb); self.effects_widgets[fx_type]['params']['feedback'] = {'widget': slider_fb, 'label': label_fb}
+            elif fx_type == "Distortion":
+                params_layout.addWidget(QLabel("Drive (dB):")); slider_drv = QSlider(Qt.Orientation.Horizontal); slider_drv.setRange(0, 500); slider_drv.setValue(int(effect_data.get("params", {}).get("drive_db", 25.0) * 10)); label_drv = QLabel(f"{slider_drv.value()/10.0:.1f}")
+                slider_drv.valueChanged.connect(lambda val, l=label_drv: l.setText(f"{val/10.0:.1f}")); params_layout.addWidget(slider_drv); params_layout.addWidget(label_drv); self.effects_widgets[fx_type]['params']['drive_db'] = {'widget': slider_drv, 'label': label_drv}
+            elif fx_type == "Bitcrush":
+                params_layout.addWidget(QLabel("Bit Depth:")); spinbox_bc = QSpinBox(); spinbox_bc.setRange(1, 32); spinbox_bc.setValue(int(effect_data.get("params", {}).get("bit_depth", 8.0))); params_layout.addWidget(spinbox_bc); self.effects_widgets[fx_type]['params']['bit_depth'] = {'widget': spinbox_bc}
             fx_box.addLayout(params_layout); effects_layout.addLayout(fx_box)
         self.layout.addLayout(effects_layout); self.layout.addStretch()
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel); self.button_box.accepted.connect(self.accept); self.button_box.rejected.connect(self.reject); self.layout.addWidget(self.button_box)
     def accept(self):
         self.sound_data_edited['name'] = self.name_input.text(); self.sound_data_edited['volume'] = round(self.volume_slider.value() / 100.0, 3); self.sound_data_edited['group_id'] = self.group_combo.currentData()
+        self.sound_data_edited['loop_routing'] = self.routing_combo.currentData()
         updated_effects = []
         for effect_data in self.sound_data_edited.get('effects', []):
             fx_type = effect_data.get('type')
@@ -180,6 +212,8 @@ class EditSoundDialog(QDialog):
                 elif fx_type == "Delay":
                     new_effect_data['params']['delay_seconds'] = round(widgets['params']['delay_seconds']['widget'].value(), 3)
                     new_effect_data['params']['feedback'] = round(widgets['params']['feedback']['widget'].value() / 100.0, 3)
+                elif fx_type == "Distortion": new_effect_data['params']['drive_db'] = round(widgets['params']['drive_db']['widget'].value() / 10.0, 1)
+                elif fx_type == "Bitcrush": new_effect_data['params']['bit_depth'] = float(widgets['params']['bit_depth']['widget'].value())
                 updated_effects.append(new_effect_data)
             else:
                 updated_effects.append(effect_data)
@@ -755,6 +789,13 @@ class SoundboardWindow(QMainWindow):
         # Audio stream state
         self._audio_stream = None
         self._audio_board = None
+
+        # Real-time processing state
+        self._active_scenes = set() # Track active sound_ids globally, decoupling from UI
+        self._active_loops = {} # dict mapping sound_id to {"array": numpy_array, "index": int, "routing": str, "volume": float}
+        self._active_effects = {} # dict mapping sound_id to list of pedalboard effect objects
+        self._audio_lock = threading.Lock() # To protect state changes during audio callback
+
         if pedalboard and hasattr(pedalboard, 'Pedalboard'):
              self._audio_board = pedalboard.Pedalboard([]) # Start with an empty board for Phase 1
 
@@ -780,7 +821,7 @@ class SoundboardWindow(QMainWindow):
         self.status_label = QLabel("Status: Initializing..."); self.statusBar().addPermanentWidget(self.status_label)
         self.bottom_buttons_layout = QHBoxLayout()
         self.toggle_stream_button = QPushButton("Start Voice Modulator"); self.toggle_stream_button.setStyleSheet("background-color: #30A030; color: white;"); self.toggle_stream_button.clicked.connect(self.toggle_audio_stream)
-        self.stop_button = QPushButton("Stop All Sounds"); self.stop_button.setStyleSheet("background-color: #A03030; color: white;"); self.stop_button.clicked.connect(self.stop_all_sounds)
+        self.stop_button = QPushButton("Clear All / Panic"); self.stop_button.setStyleSheet("background-color: #A03030; color: white;"); self.stop_button.clicked.connect(self.stop_all_sounds)
         self.bottom_buttons_layout.addWidget(self.toggle_stream_button)
         self.bottom_buttons_layout.addWidget(self.stop_button)
         self.main_layout.addLayout(self.bottom_buttons_layout)
@@ -832,19 +873,73 @@ class SoundboardWindow(QMainWindow):
                 if status:
                     print(f"[Audio Stream] Status: {status}")
 
-                # Apply pedalboard processing
-                if self._audio_board is not None:
-                    # Pedalboard expects shape (channels, frames) for processing
-                    # sounddevice provides shape (frames, channels)
-                    # We transpose, process, and transpose back
-                    processed = self._audio_board(indata.T, sample_rate)
-                    outdata[:] = processed.T
-                else:
-                    # Pass-through if no board
-                    outdata[:] = indata
+                with self._audio_lock:
+                    # Start with a copy of the input data (mono: frames x 1)
+                    current_audio = indata.copy()
 
-            # We use float32, mono input, stereo output as a standard default, or just match them
-            # For simplicity in Phase 1, we will use mono input and mono output, or stereo if possible
+                    # 1. Mix BEFORE effects loops
+                    for loop_id, loop_data in self._active_loops.items():
+                        if loop_data.get('routing') == 'before':
+                            loop_array = loop_data['array']
+                            loop_len = len(loop_array)
+                            idx = loop_data['index']
+
+                            # Grab chunk from loop
+                            chunk = np.zeros_like(current_audio)
+                            frames_filled = 0
+
+                            while frames_filled < frames:
+                                space_left_in_chunk = frames - frames_filled
+                                data_left_in_loop = loop_len - idx
+
+                                to_copy = min(space_left_in_chunk, data_left_in_loop)
+                                chunk[frames_filled:frames_filled+to_copy, 0] = loop_array[idx:idx+to_copy]
+
+                                frames_filled += to_copy
+                                idx += to_copy
+
+                                if idx >= loop_len:
+                                    idx = 0  # Loop back to beginning
+
+                            loop_data['index'] = idx
+
+                            current_audio += (chunk * loop_data.get('volume', 1.0))
+
+                    # 2. Apply Pedalboard Effects
+                    if self._audio_board is not None:
+                        # Pedalboard expects (channels, frames)
+                        processed = self._audio_board(current_audio.T, sample_rate)
+                        current_audio = processed.T
+
+                    # 3. Mix AFTER effects loops
+                    for loop_id, loop_data in self._active_loops.items():
+                        if loop_data.get('routing') == 'after':
+                            loop_array = loop_data['array']
+                            loop_len = len(loop_array)
+                            idx = loop_data['index']
+
+                            chunk = np.zeros_like(current_audio)
+                            frames_filled = 0
+
+                            while frames_filled < frames:
+                                space_left_in_chunk = frames - frames_filled
+                                data_left_in_loop = loop_len - idx
+
+                                to_copy = min(space_left_in_chunk, data_left_in_loop)
+                                chunk[frames_filled:frames_filled+to_copy, 0] = loop_array[idx:idx+to_copy]
+
+                                frames_filled += to_copy
+                                idx += to_copy
+
+                                if idx >= loop_len:
+                                    idx = 0  # Loop back to beginning
+
+                            loop_data['index'] = idx
+
+                            current_audio += (chunk * loop_data.get('volume', 1.0))
+
+                    outdata[:] = current_audio
+
             channels = 1
 
             self._audio_stream = sd.Stream(
@@ -1177,6 +1272,8 @@ class SoundboardWindow(QMainWindow):
 
                     btn = SoundButton(sound_data);
                     btn.set_file_missing(not sound_data.get("file_exists", False))
+                    if sound_id in self._active_scenes:
+                        btn.set_active(True)
                     # Connect button click to the slot designed for button presses
                     btn.clicked.connect(partial(self.play_sound_from_button, sound_id))
                     grid_layout.addWidget(btn, row, col);
@@ -1227,12 +1324,15 @@ class SoundboardWindow(QMainWindow):
                             "volume": 1.0,
                             "group_id": "default", # Add to default group initially
                             "hotkey": None,
+                            "loop_routing": "after",
                             "effects": []
                         }
                         # Add default effect structures if pedalboard is loaded
                         if _AUDIO_LIBS_LOADED and pedalboard:
                             if _pb_reverb_ok: new_sound_data["effects"].append({"type": "Reverb", "enabled": False, "params": {"room_size": 0.5}})
                             if _pb_delay_ok: new_sound_data["effects"].append({"type": "Delay", "enabled": False, "params": {"delay_seconds": 0.3, "feedback": 0.4}})
+                            if _pb_distortion_ok: new_sound_data["effects"].append({"type": "Distortion", "enabled": False, "params": {"drive_db": 25.0}})
+                            if _pb_bitcrush_ok: new_sound_data["effects"].append({"type": "Bitcrush", "enabled": False, "params": {"bit_depth": 8.0}})
 
                         self.config.setdefault("sounds", []).append(new_sound_data); added_count += 1
                     except Exception as e: print(f"Error processing file {file_path}: {e}"); traceback.print_exc(); self.show_error_popup("Add Sound Error", f"Could not process file:\n{os.path.basename(file_path)}\n\nError: {e}")
@@ -1390,12 +1490,121 @@ class SoundboardWindow(QMainWindow):
 
     # Internal playback logic
     def _play_sound_internal(self, sound_id, source='unknown'):
-        """Internal logic to play sound, called by button or hotkey slots."""
-        print(f"Button {sound_id} clicked - one-shot playback disabled for Phase 1")
+        """Internal logic to play sound, called by button or hotkey slots.
+           Now acts as a toggle for loops and effects."""
+        sound_data = self.find_sound_by_id(sound_id)
+        if not sound_data:
+            print(f"Error: Sound ID {sound_id} not found.")
+            return
+
+        # Toggle state
+        is_turning_on = sound_id not in self._active_scenes
+
+        if is_turning_on:
+            self._activate_scene(sound_id, sound_data)
+        else:
+            self._deactivate_scene(sound_id)
+
+        # Update button if it's currently rendered
+        button = self.sound_buttons.get(sound_id)
+        if button:
+            button.set_active(is_turning_on)
+
+    def _rebuild_pedalboard(self):
+        """Reconstructs the Pedalboard chain from all currently active effects."""
+        if not _AUDIO_LIBS_LOADED or not pedalboard:
+            return
+
+        chain = []
+        # Append effects from all active sound_ids in order of insertion
+        for s_id, effects_list in self._active_effects.items():
+            chain.extend(effects_list)
+
+        with self._audio_lock:
+            self._audio_board = pedalboard.Pedalboard(chain)
+
+    def _activate_scene(self, sound_id, sound_data):
+        print(f"Activating Scene: {sound_data.get('name')}")
+        self._active_scenes.add(sound_id)
+
+        # 1. Load Audio Loop if available
+        absolute_path = sound_data.get("absolute_path")
+        if absolute_path and os.path.exists(absolute_path):
+            try:
+                # Load whole file into memory, convert to mono float32
+                data, fs = sf.read(absolute_path, dtype='float32')
+                if len(data.shape) > 1:
+                    # Convert stereo to mono by averaging channels
+                    data = data.mean(axis=1)
+
+                with self._audio_lock:
+                    self._active_loops[sound_id] = {
+                        "array": data,
+                        "index": 0,
+                        "routing": sound_data.get("loop_routing", "after"),
+                        "volume": sound_data.get("volume", 1.0)
+                    }
+                print(f" -> Loaded loop: {len(data)} frames")
+            except Exception as e:
+                print(f"Error loading loop {absolute_path}: {e}")
+                QTimer.singleShot(0, partial(self._mark_file_missing, sound_id))
+
+        # 2. Add Effects to Master Chain
+        if _AUDIO_LIBS_LOADED and pedalboard:
+            scene_effects = []
+            for fx_config in sound_data.get('effects', []):
+                if not fx_config.get('enabled', False):
+                    continue
+
+                fx_type = fx_config.get('type')
+                params = fx_config.get('params', {})
+
+                try:
+                    if fx_type == "Reverb" and _pb_reverb_ok:
+                        scene_effects.append(pedalboard.Reverb(room_size=params.get("room_size", 0.5)))
+                    elif fx_type == "Delay" and _pb_delay_ok:
+                        scene_effects.append(pedalboard.Delay(delay_seconds=params.get("delay_seconds", 0.5), feedback=params.get("feedback", 0.3)))
+                    elif fx_type == "Distortion" and _pb_distortion_ok:
+                        scene_effects.append(pedalboard.Distortion(drive_db=params.get("drive_db", 25.0)))
+                    elif fx_type == "Bitcrush" and _pb_bitcrush_ok:
+                        scene_effects.append(pedalboard.Bitcrush(bit_depth=params.get("bit_depth", 8.0)))
+                except Exception as e:
+                    print(f"Error creating effect {fx_type}: {e}")
+
+            if scene_effects:
+                self._active_effects[sound_id] = scene_effects
+                self._rebuild_pedalboard()
+
+    def _deactivate_scene(self, sound_id):
+        print(f"Deactivating Scene: {sound_id}")
+        self._active_scenes.discard(sound_id)
+
+        with self._audio_lock:
+            if sound_id in self._active_loops:
+                del self._active_loops[sound_id]
+
+        if sound_id in self._active_effects:
+            del self._active_effects[sound_id]
+            self._rebuild_pedalboard()
 
     @Slot()
     def stop_all_sounds(self):
-        print("Stop all sounds called - disabled for Phase 1")
+        print("Panic / Stop All triggered.")
+        self._active_scenes.clear()
+
+        # Clear processing queues
+        with self._audio_lock:
+            self._active_loops.clear()
+
+        self._active_effects.clear()
+        self._rebuild_pedalboard()
+
+        # Untoggle UI
+        for btn in self.sound_buttons.values():
+            if btn.is_active:
+                btn.set_active(False)
+
+        self.update_status("All scenes deactivated.")
 
     @Slot(str)
     def _mark_file_missing(self, sound_id):
