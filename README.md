@@ -45,7 +45,7 @@ To use this as a microphone replacement in other apps, you *must* install a virt
 
 3.  **Run the application:**
     ```bash
-    python soundboard.py  # (Note: The main entry point will be renamed in a future update)
+    python voice_modulator.py
     ```
 
 ## Usage (Audio Routing)

@@ -85,7 +85,7 @@ except ImportError: pass
 CONFIG_FILENAME = "config.json"
 DEFAULT_CONFIG = {
     "version": "1.0",
-    "settings": { "scan_interval_minutes": 15, "output_device_name": "Default", "stop_all_hotkey": None, "grid_columns": 5 },
+    "settings": { "scan_interval_minutes": 15, "input_device_name": "Default", "output_device_name": "Default", "stop_all_hotkey": None, "grid_columns": 5 },
     "groups": [ {"id": "default", "name": "Default"} ],
     "sounds": []
 }
@@ -441,7 +441,9 @@ class SettingsDialog(QDialog):
         self.setWindowTitle("Settings"); self.setMinimumWidth(400)
         self.layout = QVBoxLayout(self); form_layout = QtWidgets.QFormLayout()
 
-        self.device_combo = QComboBox(); self.populate_devices(); form_layout.addRow("Audio Output Device:", self.device_combo)
+        self.input_device_combo = QComboBox(); self.output_device_combo = QComboBox(); self.populate_devices();
+        form_layout.addRow("Audio Input Device (Mic):", self.input_device_combo)
+        form_layout.addRow("Audio Output Device (Virtual Cable):", self.output_device_combo)
         self.scan_spinbox = QSpinBox(); self.scan_spinbox.setRange(0, 1440); self.scan_spinbox.setValue(self.settings_edited.get('scan_interval_minutes', 15)); self.scan_spinbox.setSuffix(" minutes (0=disabled)"); form_layout.addRow("File Scan Interval:", self.scan_spinbox)
         self.columns_spinbox = QSpinBox(); self.columns_spinbox.setRange(1, 20); self.columns_spinbox.setValue(self.settings_edited.get('grid_columns', 5)); form_layout.addRow("Grid Columns:", self.columns_spinbox)
 
@@ -462,17 +464,26 @@ class SettingsDialog(QDialog):
         self.hotkey_captured_signal.connect(self._on_stop_all_captured)
 
     def populate_devices(self):
-        self.device_combo.clear(); self.device_combo.addItem("Default", userData=None); current_name = self.settings_edited.get('output_device_name', 'Default'); current_index = 0
+        self.input_device_combo.clear(); self.output_device_combo.clear();
+        self.input_device_combo.addItem("Default", userData=None); self.output_device_combo.addItem("Default", userData=None);
+        current_input_name = self.settings_edited.get('input_device_name', 'Default'); current_input_index = 0
+        current_output_name = self.settings_edited.get('output_device_name', 'Default'); current_output_index = 0
         try:
             if not _AUDIO_LIBS_LOADED: raise RuntimeError("Audio library (sounddevice) not loaded.")
             devices = sd.query_devices()
             for i, dev in enumerate(devices):
+                if dev['max_input_channels'] > 0:
+                    self.input_device_combo.addItem(dev['name'], userData=dev['name']);
+                    if dev['name'] == current_input_name: current_input_index = self.input_device_combo.count() - 1
                 if dev['max_output_channels'] > 0:
-                    self.device_combo.addItem(dev['name'], userData=dev['name']);
-                    if dev['name'] == current_name: current_index = self.device_combo.count() - 1
+                    self.output_device_combo.addItem(dev['name'], userData=dev['name']);
+                    if dev['name'] == current_output_name: current_output_index = self.output_device_combo.count() - 1
         except Exception as e:
-            print(f"Error querying audio devices: {e}"); self.device_combo.clear(); self.device_combo.addItem("Error loading devices", userData=None); self.device_combo.setEnabled(False)
-        self.device_combo.setCurrentIndex(current_index)
+            print(f"Error querying audio devices: {e}");
+            self.input_device_combo.clear(); self.input_device_combo.addItem("Error loading devices", userData=None); self.input_device_combo.setEnabled(False)
+            self.output_device_combo.clear(); self.output_device_combo.addItem("Error loading devices", userData=None); self.output_device_combo.setEnabled(False)
+        self.input_device_combo.setCurrentIndex(current_input_index)
+        self.output_device_combo.setCurrentIndex(current_output_index)
 
     # Uses the same logic structure as AssignHotkeyDialog._dialog_on_press
     def _dialog_stop_all_on_press(self, key):
@@ -638,7 +649,9 @@ class SettingsDialog(QDialog):
 
     def accept(self):
         self.stop_capture_listener() # Stop listener on accept
-        selected_device_name = self.device_combo.currentData(); self.settings_edited['output_device_name'] = selected_device_name or "Default"; self.settings_edited['scan_interval_minutes'] = self.scan_spinbox.value(); self.settings_edited['grid_columns'] = self.columns_spinbox.value()
+        selected_input_device_name = self.input_device_combo.currentData(); self.settings_edited['input_device_name'] = selected_input_device_name or "Default";
+        selected_output_device_name = self.output_device_combo.currentData(); self.settings_edited['output_device_name'] = selected_output_device_name or "Default";
+        self.settings_edited['scan_interval_minutes'] = self.scan_spinbox.value(); self.settings_edited['grid_columns'] = self.columns_spinbox.value()
         self.changes_made = (self.settings_edited != self.settings_original);
         if self.changes_made:
             self.settings_original.clear()
@@ -740,6 +753,13 @@ class SoundboardWindow(QMainWindow):
         self.setWindowTitle("Live Soundboard v1.0"); self.setGeometry(100, 100, 800, 600); self.setMinimumSize(600, 400)
         self._setup_ui()
         self.apply_dark_theme()
+
+        # Audio stream state
+        self._audio_stream = None
+        self._audio_board = None
+        if pedalboard and hasattr(pedalboard, 'Pedalboard'):
+             self._audio_board = pedalboard.Pedalboard([]) # Start with an empty board for Phase 1
+
         self.file_check_timer = QTimer(self); self.file_check_timer.timeout.connect(self.check_files)
         self.populate_groups_and_sounds()
         self.start_file_integrity_check()
@@ -760,12 +780,105 @@ class SoundboardWindow(QMainWindow):
         top_bar_layout.addWidget(self.search_input); top_bar_layout.addWidget(self.add_button); self.main_layout.addLayout(top_bar_layout)
         self.tab_widget = QTabWidget(); self.tab_widget.setMinimumHeight(200); self.tab_widget.currentChanged.connect(self.on_tab_changed); self.main_layout.addWidget(self.tab_widget, stretch=1)
         self.status_label = QLabel("Status: Initializing..."); self.statusBar().addPermanentWidget(self.status_label)
+        self.bottom_buttons_layout = QHBoxLayout()
+        self.toggle_stream_button = QPushButton("Start Voice Modulator"); self.toggle_stream_button.setStyleSheet("background-color: #30A030; color: white;"); self.toggle_stream_button.clicked.connect(self.toggle_audio_stream)
         self.stop_button = QPushButton("Stop All Sounds"); self.stop_button.setStyleSheet("background-color: #A03030; color: white;"); self.stop_button.clicked.connect(self.stop_all_sounds)
-        self.main_layout.addWidget(self.stop_button)
+        self.bottom_buttons_layout.addWidget(self.toggle_stream_button)
+        self.bottom_buttons_layout.addWidget(self.stop_button)
+        self.main_layout.addLayout(self.bottom_buttons_layout)
 
     def apply_dark_theme(self):
         # Apply a dark theme using QSS
         self.setStyleSheet(""" QWidget{background-color:#222;color:#DDD}QMainWindow::separator{background-color:#444;width:1px;height:1px}QMenuBar,QMenu{background-color:#333;color:#DDD}QMenuBar::item:selected,QMenu::item:selected{background-color:#555}QPushButton{background-color:#505050;color:#FFF;border:1px solid #666;padding:5px;min-height:20px}QPushButton:hover{background-color:#5A5A5A}QPushButton:pressed{background-color:#606060}QLineEdit,QTextEdit,QPlainTextEdit,QSpinBox,QDoubleSpinBox{background-color:#333;color:#DDD;border:1px solid #666}QTabWidget::pane{border-top:1px solid #444;background-color:#282828}QTabBar::tab{background:#444;color:#CCC;border:1px solid #555;border-bottom:none;padding:5px 10px;margin-right:2px}QTabBar::tab:selected{background:#555;color:#FFF;margin-bottom:-1px}QTabBar::tab:hover{background:#5A5A5A}QScrollArea{border:none}QScrollBar:vertical{border:none;background:#282828;width:10px;margin:0}QScrollBar::handle:vertical{background:#555;min-height:20px}QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0px}QScrollBar:horizontal{border:none;background:#282828;height:10px;margin:0}QScrollBar::handle:horizontal{background:#555;min-width:20px}QScrollBar::add-line:horizontal,QScrollBar::sub-line:horizontal{width:0px}QSlider::groove:horizontal{border:1px solid #555;height:8px;background:#333}QSlider::handle:horizontal{background:#777;border:1px solid #555;width:18px;margin:-2px 0;border-radius:3px}QComboBox{border:1px solid #666;background-color:#333;padding: 2px;}QComboBox::drop-down{border:none;background-color:#505050;width: 15px;}QComboBox::down-arrow{image: url(noimg.png); width: 10px; height: 10px;} QComboBox QAbstractItemView{border:1px solid #666;background-color:#333;color:#DDD;selection-background-color:#555}QStatusBar{background-color:#333;color:#DDD}QMenu{border:1px solid #555}QDialog{background-color:#282828}QListWidget{border:1px solid #666;background-color:#333;} QListWidget::item{padding: 3px;} QListWidget::item:selected{background-color:#555;} """)
+
+    # --- Live Audio Stream ---
+    @Slot()
+    def toggle_audio_stream(self):
+        if self._audio_stream and self._audio_stream.active:
+            self.stop_audio_stream()
+        else:
+            self.start_audio_stream()
+
+    def start_audio_stream(self):
+        if not _AUDIO_LIBS_LOADED:
+            self.show_error_popup("Audio Error", "Audio libraries not loaded. Cannot start stream.")
+            return
+
+        input_dev_name = self.config.get("settings", {}).get("input_device_name", "Default")
+        output_dev_name = self.config.get("settings", {}).get("output_device_name", "Default")
+
+        input_dev_idx = None
+        output_dev_idx = None
+
+        try:
+            devices = sd.query_devices()
+            if input_dev_name != "Default":
+                for i, dev in enumerate(devices):
+                    if dev['name'] == input_dev_name and dev['max_input_channels'] > 0:
+                        input_dev_idx = i
+                        break
+            if output_dev_name != "Default":
+                for i, dev in enumerate(devices):
+                    if dev['name'] == output_dev_name and dev['max_output_channels'] > 0:
+                        output_dev_idx = i
+                        break
+        except Exception as e:
+            self.show_error_popup("Device Error", f"Error querying devices: {e}")
+            return
+
+        try:
+            # We use blocksize 512 for balance of latency and stability, 48000 Hz is standard
+            sample_rate = 48000
+
+            def stream_callback(indata, outdata, frames, time, status):
+                if status:
+                    print(f"[Audio Stream] Status: {status}")
+
+                # Apply pedalboard processing
+                if self._audio_board is not None:
+                    # Pedalboard expects shape (channels, frames) for processing
+                    # sounddevice provides shape (frames, channels)
+                    # We transpose, process, and transpose back
+                    processed = self._audio_board(indata.T, sample_rate)
+                    outdata[:] = processed.T
+                else:
+                    # Pass-through if no board
+                    outdata[:] = indata
+
+            # We use float32, mono input, stereo output as a standard default, or just match them
+            # For simplicity in Phase 1, we will use mono input and mono output, or stereo if possible
+            channels = 1
+
+            self._audio_stream = sd.Stream(
+                device=(input_dev_idx, output_dev_idx),
+                samplerate=sample_rate,
+                blocksize=512,
+                dtype=np.float32,
+                channels=channels,
+                callback=stream_callback
+            )
+            self._audio_stream.start()
+
+            self.toggle_stream_button.setText("Stop Voice Modulator")
+            self.toggle_stream_button.setStyleSheet("background-color: #A03030; color: white;")
+            self.update_status(f"Voice Modulator started (In: {input_dev_name}, Out: {output_dev_name})")
+
+        except Exception as e:
+            self.show_error_popup("Stream Error", f"Could not start audio stream:\n{e}")
+            self._audio_stream = None
+
+    def stop_audio_stream(self):
+        if self._audio_stream:
+            try:
+                self._audio_stream.stop()
+                self._audio_stream.close()
+            except Exception as e:
+                print(f"Error closing stream: {e}")
+            finally:
+                self._audio_stream = None
+                self.toggle_stream_button.setText("Start Voice Modulator")
+                self.toggle_stream_button.setStyleSheet("background-color: #30A030; color: white;")
+                self.update_status("Voice Modulator stopped.")
 
     # --- Slots and Methods ---
     @Slot()
@@ -793,11 +906,24 @@ class SoundboardWindow(QMainWindow):
             updated_settings = dialog.get_updated_settings()
             if updated_settings:
                 print("Applying updated settings...");
+
+                # Check if device settings changed
+                old_input = self.config.get('settings', {}).get('input_device_name')
+                old_output = self.config.get('settings', {}).get('output_device_name')
+                new_input = updated_settings.get('input_device_name')
+                new_output = updated_settings.get('output_device_name')
+                device_changed = (old_input != new_input) or (old_output != new_output)
+
                 self.config['settings'] = updated_settings # Update main config dict
                 self.save_config();
                 self.start_file_integrity_check(); # Restart timer if interval changed
                 self.populate_groups_and_sounds(); # Repopulate if columns changed
                 self.setup_hotkeys() # Re-setup if stop_all hotkey changed
+
+                if device_changed and self._audio_stream and self._audio_stream.active:
+                     print("Audio devices changed, restarting stream...")
+                     self.stop_audio_stream()
+                     self.start_audio_stream()
             else:
                 print("Settings dialog accepted, but no changes detected.")
         else:
@@ -1952,6 +2078,7 @@ class SoundboardWindow(QMainWindow):
     def on_stop(self):
         """Cleanup actions performed before the application exits."""
         print("Soundboard App Stopping");
+        self.stop_audio_stream() # Ensure the live stream is stopped
         self._stop_hotkey_listener() # Stop listening for hotkeys
 
         if self.file_check_timer.isActive(): print("Stopping file check timer."); self.file_check_timer.stop()
