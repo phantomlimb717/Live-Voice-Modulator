@@ -48,17 +48,17 @@ The new architecture requires shifting from *playing static files on demand* to 
 ## 🗺️ Development Roadmap
 
 ### Phase 1: Core Audio Engine Refactor (The "Plumbing")
-*   [ ] Rename core files (`soundboard.py` -> `voice_modulator.py`).
-*   [ ] Rip out the one-shot `pydub` playback threads.
-*   [ ] Implement a continuous `sounddevice.Stream` that reads from the selected Input Device and writes to the selected Output Device.
-*   [ ] Establish the basic `pedalboard` `Pedalboard([])` object in the stream callback to prove audio passes through.
-*   [ ] Implement a basic UI to select the Input (Microphone) and Output (VB-Cable) devices and save them to `config.json`.
+*   [x] Rename core files (`soundboard.py` -> `voice_modulator.py`).
+*   [x] Rip out the one-shot `pydub` playback threads.
+*   [x] Implement a continuous `sounddevice.Stream` that reads from the selected Input Device and writes to the selected Output Device.
+*   [x] Establish the basic `pedalboard` `Pedalboard([])` object in the stream callback to prove audio passes through.
+*   [x] Implement a basic UI to select the Input (Microphone) and Output (VB-Cable) devices and save them to `config.json`.
 
 ### Phase 2: Effects & Loop Implementation (The "Fun Stuff")
-*   [ ] Create UI controls (sliders/toggles) for native `pedalboard` effects (Reverb, Distortion/Drive, Bitcrush).
-*   [ ] Implement the logic to dynamically update the `Pedalboard` chain while the stream is running without causing audio dropouts.
-*   [ ] Implement the "Background Noise Mixer". Allow a user to select an audio file, loop it continuously in a separate thread/generator, and add its numpy array to the microphone's processed numpy array before sending it to the OutputStream.
-*   [ ] Wire existing PySide6 buttons to toggle these effects/loops on and off.
+*   [x] Create UI controls (sliders/toggles) for native `pedalboard` effects (Reverb, Distortion/Drive, Bitcrush).
+*   [x] Implement the logic to dynamically update the `Pedalboard` chain while the stream is running without causing audio dropouts.
+*   [x] Implement the "Background Noise Mixer". Allow a user to select an audio file, loop it continuously in a separate thread/generator, and add its numpy array to the microphone's processed numpy array before sending it to the OutputStream.
+*   [x] Wire existing PySide6 buttons to toggle these effects/loops on and off.
 
 ### Phase 3: VST3 Support & Advanced UI
 *   [ ] Add a file picker in the UI to load `.vst3` files.
