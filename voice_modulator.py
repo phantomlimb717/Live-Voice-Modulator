@@ -1,4 +1,4 @@
-# soundboard_pyside_v5_fixed_indent.py - Python Soundboard using PySide6
+# voice_modulator.py - Live Voice Modulator using PySide6
 # FINAL REFACTOR: Uses PYNPUT & QMetaObject.invokeMethod
 # Fixes dialog hotkey capture for modifiers.
 # Includes revised _key_to_string for Ctrl key capture fix.
@@ -18,10 +18,10 @@ try:
     from PySide6 import QtCore, QtGui, QtWidgets
     from PySide6.QtWidgets import (
         QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-        QPushButton, QLabel, QLineEdit, QGridLayout, QScrollArea, QTabWidget,
+        QPushButton, QLabel, QLineEdit, QScrollArea,
         QDialog, QSlider, QComboBox, QDialogButtonBox, QFileDialog, QMenu,
         QStyleFactory, QMessageBox, QMenuBar, QInputDialog, QListWidget, QListWidgetItem,
-    QSpinBox, QCheckBox, QDoubleSpinBox, QSizePolicy, QFormLayout
+        QSpinBox, QCheckBox, QDoubleSpinBox, QSizePolicy, QFormLayout
     )
     # Added QMetaObject, Q_ARG, Signal, QThread
     from PySide6.QtCore import Qt, QTimer, QSize, QMetaObject, Slot, Q_ARG, QPoint, QThread, Signal
@@ -110,13 +110,21 @@ def get_script_directory():
     except Exception as e: print(f"FATAL: Could not determine application directory: {e}"); return None
 
 # --- Custom Widgets ---
-class SoundButton(QPushButton):
+class SceneButton(QPushButton):
+    def __init__(self, sound_data, parent=None):
+        super().__init__(sound_data.get("name", "Unnamed"), parent)
+        self.sound_data = sound_data
+        self.sound_id = sound_data.get("id")
+        self.file_missing = not sound_data.get("file_exists", True)
+        self.is_active = False
+        self.setMinimumHeight(60)
+        self.update_appearance()
     def __init__(self, sound_data, parent=None):
         super().__init__(sound_data.get("name", "Unnamed"), parent)
         self.sound_data = sound_data; self.sound_id = sound_data.get("id")
         self.file_missing = not sound_data.get("file_exists", True)
         self.is_active = False # Tracks if the effect/loop is currently toggled ON
-        self.setMinimumHeight(60); self.update_appearance()
+        self.setMinimumHeight(50); self.update_appearance()
     def set_file_missing(self, is_missing):
         if self.file_missing != is_missing: self.file_missing = is_missing; self.update_appearance()
     def set_active(self, active):
@@ -130,14 +138,14 @@ class SoundButton(QPushButton):
             self.setStyleSheet(base_style + "QPushButton { background-color: #802020; border: 1px solid red; }" + pressed_style + hover_style)
             self.setText(f"[MISSING] {name}")
         elif self.is_active:
-            self.setStyleSheet(base_style + "QPushButton { background-color: #208020; border: 1px solid #00FF00; }" + pressed_style + hover_style)
+            self.setStyleSheet(base_style + "QPushButton { background-color: #30A030; border: 1px solid #50FF50; font-weight: bold; }" + pressed_style + hover_style)
             self.setText(f"[ACTIVE] {name}")
         else:
             self.setStyleSheet(base_style + "QPushButton { background-color: #505050; }" + pressed_style + hover_style)
             self.setText(name)
     def contextMenuEvent(self, event):
         main_window = self.window()
-        if isinstance(main_window, SoundboardWindow) and hasattr(main_window, 'show_context_menu_for_sound'):
+        if isinstance(main_window, VoiceModulatorWindow) and hasattr(main_window, 'show_context_menu_for_sound'):
             main_window.show_context_menu_for_sound(self.sound_id, self, event.globalPos())
 
 # --- Dialog Classes ---
@@ -535,7 +543,7 @@ class AssignHotkeyDialog(QDialog):
             if conflict['type'] == 'sound':
                 self.capture_label.setText(f"Conflict: '{canonical_str}' used by '{conflict['name']}'")
             elif conflict['type'] == 'stop_all':
-                self.capture_label.setText(f"Conflict: '{canonical_str}' used by Stop All Sounds")
+                self.capture_label.setText(f"Conflict: '{canonical_str}' used by Deactivate All Scenes")
             self.ok_button.setEnabled(False)
             self.captured_hotkey_str = None # Prevent saving conflicting key
         else:
@@ -816,7 +824,7 @@ class SettingsDialog(QDialog):
 class ManageGroupsDialog(QDialog):
     def __init__(self, current_groups, parent=None):
         super().__init__(parent); self.groups_original = current_groups; self.groups_edited = copy.deepcopy(current_groups); self._main_window = parent
-        self.setWindowTitle("Manage Sound Groups"); self.setMinimumSize(350, 400); self.layout = QVBoxLayout(self); self.list_widget = QListWidget(); self.populate_list(); self.layout.addWidget(self.list_widget)
+        self.setWindowTitle("Manage Scene Groups"); self.setMinimumSize(350, 400); self.layout = QVBoxLayout(self); self.list_widget = QListWidget(); self.populate_list(); self.layout.addWidget(self.list_widget)
         button_layout = QHBoxLayout(); add_button = QPushButton("Add Group"); rename_button = QPushButton("Rename Selected"); delete_button = QPushButton("Delete Selected")
         button_layout.addWidget(add_button); button_layout.addWidget(rename_button); button_layout.addWidget(delete_button); self.layout.addLayout(button_layout)
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel); self.layout.addWidget(self.button_box)
@@ -868,7 +876,7 @@ class ManageGroupsDialog(QDialog):
 
 
 # --- Main Application Window ---
-class SoundboardWindow(QMainWindow):
+class VoiceModulatorWindow(QMainWindow):
 
     # --- Constants for Hotkey Handling ---
     MODIFIER_KEYS = { # Used to identify modifier keys by their canonical string
@@ -924,8 +932,8 @@ class SoundboardWindow(QMainWindow):
         file_menu.addAction(settings_action); file_menu.addSeparator(); file_menu.addAction(backup_action); file_menu.addAction(restore_action); file_menu.addSeparator(); file_menu.addAction(exit_action)
         edit_menu = self.menu_bar.addMenu("&Edit"); manage_groups_action = QAction("Manage &Groups", self); manage_groups_action.triggered.connect(self.open_manage_groups_dialog); edit_menu.addAction(manage_groups_action)
         self.central_widget = QWidget(); self.setCentralWidget(self.central_widget); self.main_layout = QVBoxLayout(self.central_widget); self.main_layout.setContentsMargins(5, 5, 5, 5); self.main_layout.setSpacing(5)
-        top_bar_layout = QHBoxLayout(); self.search_input = QLineEdit(); self.search_input.setPlaceholderText("Search sounds...")
-        self.search_input.textChanged.connect(self.filter_sounds); self.add_button = QPushButton("Add Sound(s)"); self.add_button.setFixedWidth(120); self.add_button.clicked.connect(self.add_sound_dialog)
+        top_bar_layout = QHBoxLayout(); self.search_input = QLineEdit(); self.search_input.setPlaceholderText("Search scenes/effects...")
+        self.search_input.textChanged.connect(self.filter_sounds); self.add_button = QPushButton("Add Scene/Effect"); self.add_button.setFixedWidth(120); self.add_button.clicked.connect(self.add_sound_dialog)
         top_bar_layout.addWidget(self.search_input); top_bar_layout.addWidget(self.add_button); self.main_layout.addLayout(top_bar_layout)
 
         self.main_scroll_area = QScrollArea()
@@ -949,7 +957,7 @@ class SoundboardWindow(QMainWindow):
 
     def apply_dark_theme(self):
         # Apply a dark theme using QSS
-        self.setStyleSheet(""" QWidget{background-color:#222;color:#DDD}QMainWindow::separator{background-color:#444;width:1px;height:1px}QMenuBar,QMenu{background-color:#333;color:#DDD}QMenuBar::item:selected,QMenu::item:selected{background-color:#555}QPushButton{background-color:#505050;color:#FFF;border:1px solid #666;padding:5px;min-height:20px}QPushButton:hover{background-color:#5A5A5A}QPushButton:pressed{background-color:#606060}QLineEdit,QTextEdit,QPlainTextEdit,QSpinBox,QDoubleSpinBox{background-color:#333;color:#DDD;border:1px solid #666}QTabWidget::pane{border-top:1px solid #444;background-color:#282828}QTabBar::tab{background:#444;color:#CCC;border:1px solid #555;border-bottom:none;padding:5px 10px;margin-right:2px}QTabBar::tab:selected{background:#555;color:#FFF;margin-bottom:-1px}QTabBar::tab:hover{background:#5A5A5A}QScrollArea{border:none}QScrollBar:vertical{border:none;background:#282828;width:10px;margin:0}QScrollBar::handle:vertical{background:#555;min-height:20px}QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0px}QScrollBar:horizontal{border:none;background:#282828;height:10px;margin:0}QScrollBar::handle:horizontal{background:#555;min-width:20px}QScrollBar::add-line:horizontal,QScrollBar::sub-line:horizontal{width:0px}QSlider::groove:horizontal{border:1px solid #555;height:8px;background:#333}QSlider::handle:horizontal{background:#777;border:1px solid #555;width:18px;margin:-2px 0;border-radius:3px}QComboBox{border:1px solid #666;background-color:#333;padding: 2px;}QComboBox::drop-down{border:none;background-color:#505050;width: 15px;}QComboBox::down-arrow{image: url(noimg.png); width: 10px; height: 10px;} QComboBox QAbstractItemView{border:1px solid #666;background-color:#333;color:#DDD;selection-background-color:#555}QStatusBar{background-color:#333;color:#DDD}QMenu{border:1px solid #555}QDialog{background-color:#282828}QListWidget{border:1px solid #666;background-color:#333;} QListWidget::item{padding: 3px;} QListWidget::item:selected{background-color:#555;} """)
+        self.setStyleSheet(""" QWidget{background-color:#222;color:#DDD}QMainWindow::separator{background-color:#444;width:1px;height:1px}QMenuBar,QMenu{background-color:#333;color:#DDD}QMenuBar::item:selected,QMenu::item:selected{background-color:#555}QPushButton{background-color:#505050;color:#FFF;border:1px solid #666;padding:5px;min-height:20px}QPushButton:hover{background-color:#5A5A5A}QPushButton:pressed{background-color:#606060}QLineEdit,QTextEdit,QPlainTextEdit,QSpinBox,QDoubleSpinBox{background-color:#333;color:#DDD;border:1px solid #666}QScrollArea{border:none}QScrollBar:vertical{border:none;background:#282828;width:10px;margin:0}QScrollBar::handle:vertical{background:#555;min-height:20px}QScrollBar::add-line:vertical,QScrollBar::sub-line:vertical{height:0px}QScrollBar:horizontal{border:none;background:#282828;height:10px;margin:0}QScrollBar::handle:horizontal{background:#555;min-width:20px}QScrollBar::add-line:horizontal,QScrollBar::sub-line:horizontal{width:0px}QSlider::groove:horizontal{border:1px solid #555;height:8px;background:#333}QSlider::handle:horizontal{background:#777;border:1px solid #555;width:18px;margin:-2px 0;border-radius:3px}QComboBox{border:1px solid #666;background-color:#333;padding: 2px;}QComboBox::drop-down{border:none;background-color:#505050;width: 15px;}QComboBox::down-arrow{image: url(noimg.png); width: 10px; height: 10px;} QComboBox QAbstractItemView{border:1px solid #666;background-color:#333;color:#DDD;selection-background-color:#555}QStatusBar{background-color:#333;color:#DDD}QMenu{border:1px solid #555}QDialog{background-color:#282828}QListWidget{border:1px solid #666;background-color:#333;} QListWidget::item{padding: 3px;} QListWidget::item:selected{background-color:#555;} """)
 
     # --- Live Audio Stream ---
     @Slot()
@@ -1113,7 +1121,7 @@ class SoundboardWindow(QMainWindow):
                 current_header = widget
                 header_has_visible_buttons = False
 
-            elif isinstance(widget, SoundButton):
+            elif isinstance(widget, SceneButton):
                 is_visible = not search_term or search_term in widget.sound_data.get('name', '').lower()
                 widget.setVisible(is_visible)
                 if is_visible:
@@ -1397,7 +1405,7 @@ class SoundboardWindow(QMainWindow):
                         if "absolute_path" in sound_data and "file_exists" not in sound_data:
                             sound_data["file_exists"] = os.path.exists(sound_data["absolute_path"]) if sound_data["absolute_path"] else False
 
-                        btn = SoundButton(sound_data);
+                        btn = SceneButton(sound_data);
                         btn.set_file_missing(not sound_data.get("file_exists", False))
                         if sound_id in self._active_scenes:
                             btn.set_active(True)
@@ -2135,7 +2143,7 @@ class SoundboardWindow(QMainWindow):
             conflict = self.check_hotkey_conflict(new_hotkey_canonical, sound_data.get('id'))
             if conflict:
                 if conflict['type'] == 'sound': self.show_error_popup("Hotkey Conflict", f"Hotkey '{new_hotkey_canonical}' is already assigned to '{conflict['name']}'.")
-                elif conflict['type'] == 'stop_all': self.show_error_popup("Hotkey Conflict", f"Hotkey '{new_hotkey_canonical}' is assigned to 'Stop All Sounds'.")
+                elif conflict['type'] == 'stop_all': self.show_error_popup("Hotkey Conflict", f"Hotkey '{new_hotkey_canonical}' is assigned to 'Deactivate All Scenes'.")
                 print("Hotkey assignment cancelled due to conflict detected after dialog close.");
                 self.update_status("Hotkey assignment cancelled due to conflict.")
             else:
@@ -2223,7 +2231,7 @@ class SoundboardWindow(QMainWindow):
 
     def on_stop(self):
         """Cleanup actions performed before the application exits."""
-        print("Soundboard App Stopping");
+        print("Voice Modulator App Stopping");
         self.stop_audio_stream() # Ensure the live stream is stopped
         self._stop_hotkey_listener() # Stop listening for hotkeys
 
@@ -2232,7 +2240,7 @@ class SoundboardWindow(QMainWindow):
         self.deactivate_all_scenes()
 
         self.save_config(); # Save current state
-        print("Soundboard App Finished.")
+        print("Voice Modulator App Finished.")
 
 
 # --- Main Execution ---
@@ -2248,7 +2256,7 @@ if __name__ == '__main__':
         error_message = (f"ERROR: Missing critical core audio libraries!\n\nMissing library: {core_audio_err.name}\n\nPlease ensure sounddevice, soundfile, numpy are installed.\nTry: pip install sounddevice soundfile numpy")
         print("\n" + "="*60 + f"\n{error_message}\n" + "="*60);
         # Attempt to show critical error popup (might use Tkinter)
-        SoundboardWindow.show_critical_error_popup(None, "Missing Core Audio Libraries", error_message)
+        VoiceModulatorWindow.show_critical_error_popup(None, "Missing Core Audio Libraries", error_message)
         sys.exit(1)
 
     # Warnings for optional libraries (after critical checks pass)
@@ -2264,12 +2272,12 @@ if __name__ == '__main__':
     app.setApplicationName("PySideSoundboard")
 
     try:
-        main_window = SoundboardWindow()
+        main_window = VoiceModulatorWindow()
         main_window.show()
     except Exception as e_init:
         print(f"FATAL ERROR during application initialization: {e_init}"); traceback.print_exc();
         # Attempt to show critical error popup
-        SoundboardWindow.show_critical_error_popup(None,"Application Initialization Error", f"Could not start the soundboard.\n\nError: {e_init}")
+        VoiceModulatorWindow.show_critical_error_popup(None,"Application Initialization Error", f"Could not start the soundboard.\n\nError: {e_init}")
         sys.exit(1)
 
     sys.exit(app.exec())

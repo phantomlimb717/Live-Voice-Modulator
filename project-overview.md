@@ -66,9 +66,9 @@ The new architecture requires shifting from *playing static files on demand* to 
 *   [x] **Crucial:** Implement the `plugin.show_editor()` method provided by `pedalboard` to open the VST3's native GUI window. Note: This window runs in a separate process/thread handled by the OS/JUCE, so we need to ensure it doesn't block our PySide6 event loop.
 
 ### Phase 4: Polish & Performance
-*   [ ] Refine the global hotkey system to map to the new toggle actions instead of one-shot playback.
-*   [ ] Optimize numpy array slicing and mixing for the background loops to minimize CPU overhead.
-*   [ ] Finalize the dark-themed UI layout (moving away from the "soundboard tabs" to a more "rack-mount" or "mixer channel" look).
+*   [x] Refine the global hotkey system to map to the new toggle actions instead of one-shot playback.
+*   [x] Optimize numpy array slicing and mixing for the background loops to minimize CPU overhead.
+*   [x] Finalize the dark-themed UI layout (moving away from the "soundboard tabs" to a more "rack-mount" or "mixer channel" look).
 
 ---
 
