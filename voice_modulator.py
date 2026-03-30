@@ -40,8 +40,6 @@ try:
     import sounddevice as sd
     import soundfile as sf
     import numpy as np
-    from pydub import AudioSegment
-    from pydub.exceptions import CouldntDecodeError
     try:
         import pedalboard
         _pb_reverb_ok = hasattr(pedalboard, 'Reverb')
@@ -60,7 +58,7 @@ try:
     if pedalboard and not hasattr(pedalboard, 'Pedalboard'):
          print("ERROR: Critical 'Pedalboard' class missing from pedalboard library. Effects disabled.")
 except ImportError as e:
-     print(f"ERROR: Required audio library (sounddevice, soundfile, numpy, pydub) not found: {e}. Install requirements.")
+     print(f"ERROR: Required audio library (sounddevice, soundfile, numpy) not found: {e}. Install requirements.")
      pedalboard = None
      _pb_reverb_ok = False
      _pb_delay_ok = False
@@ -742,7 +740,7 @@ class SoundboardWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.config = {}; self.active_playback_threads = []; self.sound_buttons = {}
+        self.config = {}; self.sound_buttons = {}
         self._pynput_listener = None
         self._current_modifiers = set()
         self._hotkey_map = {}
@@ -1393,210 +1391,11 @@ class SoundboardWindow(QMainWindow):
     # Internal playback logic
     def _play_sound_internal(self, sound_id, source='unknown'):
         """Internal logic to play sound, called by button or hotkey slots."""
-        print(f"-> _play_sound_internal: ID={sound_id}, Triggered by={source}")
-        if not _AUDIO_LIBS_LOADED:
-            print(f"  - Playback aborted: Audio libs not loaded.")
-            self.update_status("ERROR: Audio libraries not loaded!");
-            print(f"<- _play_sound_internal finished early (no audio libs) for ID={sound_id}")
-            return
-
-        sound_data = self.find_sound_by_id(sound_id)
-        if not sound_data:
-            print(f"  - Playback aborted: Sound ID {sound_id} not found.");
-            print(f"<- _play_sound_internal finished early (sound not found) for ID={sound_id}")
-            return
-
-        # Ensure runtime path info is up-to-date
-        if "absolute_path" not in sound_data and sound_data.get("relative_path"):
-            self._resolve_sound_paths() # May be slightly inefficient, but ensures path is calculated
-            sound_data = self.find_sound_by_id(sound_id) # Re-fetch in case list was modified
-
-        abs_path = sound_data.get("absolute_path")
-        print(f"  - Checking file: {abs_path}")
-
-        # Check existence using os.path.exists
-        file_exists_now = os.path.exists(abs_path) if abs_path else False
-
-        if not file_exists_now:
-            sound_data["file_exists"] = False # Update live status
-            button = self.sound_buttons.get(sound_id)
-            if button: QTimer.singleShot(0, partial(button.set_file_missing, True)) # Update UI thread-safely
-            print(f"  - Playback aborted: Sound file missing for {sound_data.get('name')}")
-            self.update_status(f"Error: Cannot find file for {sound_data.get('name')}")
-            # Only prompt to relink if triggered by a button press
-            if source == 'button':
-                reply = QtWidgets.QMessageBox.question(self, 'File Missing', f"Sound file for '{sound_data.get('name')}' is missing or inaccessible.\nWould you like to relink it?", QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No, QtWidgets.QMessageBox.StandardButton.No)
-                if reply == QtWidgets.QMessageBox.StandardButton.Yes: self.relink_sound(sound_id)
-            print(f"<- _play_sound_internal finished early (file missing) for ID={sound_id}")
-            return
-
-        # If file exists now, update status if it was previously marked missing
-        if not sound_data.get("file_exists", False):
-             sound_data["file_exists"] = True
-             button = self.sound_buttons.get(sound_id)
-             if button: QTimer.singleShot(0, partial(button.set_file_missing, False))
-
-        print(f"  - File exists. Preparing playback for: {sound_data['name']}")
-        self.update_status(f"Playing: {sound_data['name']}")
-
-        stop_event = threading.Event();
-        # Pass a copy of sound_data to the thread to avoid race conditions if edited
-        thread_data = copy.deepcopy(sound_data)
-        thread_info = {'thread': None, 'stop_event': stop_event, 'sound_id': sound_id}
-        self.active_playback_threads.append(thread_info) # Add BEFORE starting thread
-
-        try:
-            print(f"  - Creating playback thread...")
-            playback_thread = threading.Thread(target=self._play_sound_thread_func, args=(thread_data, stop_event, thread_info), daemon=True)
-            thread_info['thread'] = playback_thread # Store thread object in the dict
-            print(f"  - Starting playback thread...")
-            playback_thread.start()
-            print(f"  - Playback thread started.")
-        except Exception as e:
-            print(f"  - ERROR starting playback thread: {e}");
-            # If thread failed to start, remove its info from the active list
-            try: self.active_playback_threads.remove(thread_info)
-            except ValueError: pass # Might have already been removed somehow
-            self.update_status(f"Error starting playback: {e}")
-
-        print(f"<- _play_sound_internal finished for ID={sound_id}")
-
-    def _play_sound_thread_func(self, sound_data, stop_event, thread_info_ref):
-        # This function runs in a separate thread
-        if not _AUDIO_LIBS_LOADED: return
-
-        sound_id = sound_data.get("id", "unknown"); file_path = sound_data.get("absolute_path"); volume = sound_data.get("volume", 1.0); sound_name = sound_data.get("name", "Unknown"); stream = None
-        print(f"[Thread-{sound_id}] Starting playback for '{sound_name}' ({file_path})")
-
-        try:
-            # Load audio file
-            try: audio_segment = AudioSegment.from_file(file_path)
-            except FileNotFoundError: print(f"[Thread-{sound_id}] Error: File disappeared: {file_path}"); QTimer.singleShot(0, partial(self._mark_file_missing, sound_id)); return # Mark missing on main thread
-            except CouldntDecodeError as e: print(f"[Thread-{sound_id}] Error: Cannot decode '{sound_name}': {e}"); QTimer.singleShot(0, partial(self.update_status, f"Error: Cannot decode {sound_name}")); return
-            except Exception as e: print(f"[Thread-{sound_id}] Error loading file '{sound_name}': {e}"); traceback.print_exc(); QTimer.singleShot(0, partial(self.update_status, f"Error loading {sound_name}: {e}")); return
-
-            # Convert to numpy array (float32 for sounddevice)
-            samples = np.array(audio_segment.get_array_of_samples()).astype(np.float32);
-            # Normalize samples to [-1.0, 1.0]
-            samples /= (2**(audio_segment.sample_width * 8 - 1));
-            sample_rate = audio_segment.frame_rate
-
-            # Reshape for multi-channel if necessary
-            if audio_segment.channels > 1: samples = samples.reshape((-1, audio_segment.channels))
-            elif audio_segment.channels == 1: samples = samples.reshape((-1, 1)) # Ensure it's 2D even for mono
-            else: print(f"[Thread-{sound_id}] Warning: Audio segment reports 0 channels for '{sound_name}'"); samples = samples.reshape((-1, 1)) # Treat as mono if unknown
-
-            # Apply effects using Pedalboard if available and enabled
-            board = None
-            if pedalboard and hasattr(pedalboard, 'Pedalboard'): board = pedalboard.Pedalboard([])
-
-            if board is not None and "effects" in sound_data:
-                for fx_cfg in sound_data["effects"]:
-                    if fx_cfg.get("enabled", False):
-                        fx_type = fx_cfg.get("type"); params = fx_cfg.get("params", {})
-                        try:
-                            if hasattr(pedalboard, fx_type):
-                                effect_instance = getattr(pedalboard, fx_type)(**params);
-                                board.append(effect_instance);
-                                print(f"[Thread-{sound_id}] Added effect: {fx_type} with params {params}")
-                            else: print(f"[Thread-{sound_id}] Warn: Unknown or unavailable effect type '{fx_type}'")
-                        except Exception as e: print(f"[Thread-{sound_id}] Error creating effect '{fx_type}' with params {params}: {e}"); traceback.print_exc()
-
-            if board and len(board) > 0: # Only process if effects were actually added
-                print(f"[Thread-{sound_id}] Applying effects: {board}")
-                try: processed_samples = board(samples, sample_rate); print(f"[Thread-{sound_id}] Effects applied successfully.")
-                except Exception as e: print(f"[Thread-{sound_id}] Error applying effects: {e}"); traceback.print_exc(); processed_samples = samples # Fallback to original samples
-            else:
-                processed_samples = samples # No effects to apply
-
-            # Apply volume adjustment and clipping
-            processed_samples = np.clip(processed_samples * volume, -1.0, 1.0).astype(np.float32)
-
-            # Get output device index
-            output_dev_name = self.config.get("settings", {}).get("output_device_name", "Default"); output_dev_idx = None; actual_device_name = "Default"
-            if output_dev_name != "Default":
-                try:
-                    devices = sd.query_devices(); found = False
-                    for i, dev in enumerate(devices):
-                        if dev['name'] == output_dev_name and dev['max_output_channels'] > 0: output_dev_idx = i; actual_device_name = output_dev_name; found = True; break
-                    if not found: print(f"[Thread-{sound_id}] Warn: Output device '{output_dev_name}' not found/available. Using default.")
-                except Exception as e_dev: print(f"[Thread-{sound_id}] Error querying audio devices: {e_dev}. Using default."); traceback.print_exc()
-
-            num_channels = processed_samples.shape[1] if processed_samples.ndim > 1 else 1
-            if processed_samples.ndim == 1: processed_samples = processed_samples.reshape(-1, 1) # Ensure 2D for stream
-
-            print(f"[Thread-{sound_id}] Sending {num_channels}-ch audio @ {sample_rate}Hz to device: '{actual_device_name}' (Index: {output_dev_idx})")
-
-            # --- Playback using sounddevice stream ---
-            current_frame = 0; total_frames = len(processed_samples)
-            if total_frames == 0: print(f"[Thread-{sound_id}] Warning: Processed audio has zero frames for '{sound_name}'. Skipping playback."); return
-
-            # Define the callback function for the audio stream
-            def callback(outdata, frames, time_info, status):
-                nonlocal current_frame
-                if status: print(f"[Thread-{sound_id}] Stream status: {status}")
-                if stop_event.is_set(): print(f"[Thread-{sound_id}] Stop event detected in callback."); outdata.fill(0); raise sd.CallbackStop # Stop playback
-
-                chunk_end = current_frame + frames
-                remaining_frames = total_frames - current_frame
-
-                if remaining_frames <= frames:
-                    # Last chunk
-                    if remaining_frames > 0: outdata[:remaining_frames] = processed_samples[current_frame : current_frame + remaining_frames]
-                    outdata[remaining_frames:].fill(0) # Fill rest with silence
-                    current_frame += remaining_frames
-                    print(f"[Thread-{sound_id}] Reached end of audio data.");
-                    raise sd.CallbackStop # Signal stream completion
-                else:
-                    # Full chunk
-                    outdata[:] = processed_samples[current_frame:chunk_end];
-                    current_frame = chunk_end
-
-            # Create and start the output stream
-            stream = sd.OutputStream(samplerate=sample_rate, device=output_dev_idx, channels=num_channels, dtype=np.float32, callback=callback, finished_callback=lambda: print(f"[Thread-{sound_id}] Stream finished_callback executed."))
-            with stream:
-                print(f"[Thread-{sound_id}] Stream started. Playing {total_frames / sample_rate:.2f} seconds...")
-                # Wait for the stream to finish or stop_event to be set
-                while stream.active:
-                    if stop_event.wait(timeout=0.1): # Check stop event periodically
-                         print(f"[Thread-{sound_id}] Stop event detected while stream active.");
-                         # Stream will be stopped by the CallbackStop exception raised in the callback
-                         break
-                if not stream.active:
-                    print(f"[Thread-{sound_id}] Playback finished naturally (stream inactive).")
-
-        except sd.PortAudioError as pae: print(f"[Thread-{sound_id}] PortAudio Error playing '{sound_name}': {pae}"); traceback.print_exc(); QTimer.singleShot(0, partial(self.update_status, f"Audio Error: {pae}"))
-        except Exception as e: print(f"[Thread-{sound_id}] Generic error during playback of '{sound_name}': {e}"); traceback.print_exc(); QTimer.singleShot(0, partial(self.update_status, f"Playback Error: {e}"))
-        finally:
-            # Ensure the thread info is removed from the main list ON THE MAIN THREAD
-            QTimer.singleShot(0, partial(self._remove_active_thread, thread_info_ref))
-            print(f"[Thread-{sound_id}] Playback thread finished.")
-
+        print(f"Button {sound_id} clicked - one-shot playback disabled for Phase 1")
 
     @Slot()
     def stop_all_sounds(self):
-        if not self.active_playback_threads: return
-        print(f"Stopping all sounds! ({len(self.active_playback_threads)} active)"); self.update_status("Stopping all sounds...")
-        # Iterate over a copy of the list as setting the event might trigger removal
-        for thread_info in list(self.active_playback_threads):
-            thread = thread_info.get('thread'); stop_event = thread_info.get('stop_event'); sound_id = thread_info.get('sound_id', 'unknown')
-            if stop_event: # Check if stop_event exists
-                 print(f"Signaling stop for sound ID: {sound_id}");
-                 stop_event.set()
-            # No need to join here, the thread will finish and remove itself
-
-    @Slot(dict)
-    def _remove_active_thread(self, thread_info_to_remove):
-        # This slot runs on the main thread, called by QTimer from the playback thread
-        initial_count = len(self.active_playback_threads)
-        try:
-            self.active_playback_threads.remove(thread_info_to_remove)
-            final_count = len(self.active_playback_threads)
-            sound_id = thread_info_to_remove.get('sound_id', 'unknown')
-            print(f"Playback thread reference removed for sound ID: {sound_id}. Remaining: {final_count}")
-        except ValueError:
-            sound_id = thread_info_to_remove.get('sound_id', 'unknown')
-            print(f"Attempted to remove thread reference for {sound_id}, but it was not found (likely already finished/removed).")
+        print("Stop all sounds called - disabled for Phase 1")
 
     @Slot(str)
     def _mark_file_missing(self, sound_id):
@@ -2083,22 +1882,7 @@ class SoundboardWindow(QMainWindow):
 
         if self.file_check_timer.isActive(): print("Stopping file check timer."); self.file_check_timer.stop()
 
-        print("Signaling active playback threads to stop..."); self.stop_all_sounds() # Signal threads
-
-        print("Waiting briefly for playback threads..."); start_wait = time.time(); join_timeout = 0.5 # Short timeout per thread
-        # Iterate over a copy, as threads remove themselves from the list
-        threads_to_wait_for = list(self.active_playback_threads)
-        waited_count = 0
-        # Give threads a chance to exit gracefully after being signaled
-        # Don't explicitly join here, rely on them being daemons and the stop_event
-        # wait briefly instead
-        max_wait_time = 1.0 # Max total wait time
-        while self.active_playback_threads and (time.time() - start_wait) < max_wait_time:
-            time.sleep(0.05)
-
-        active_threads_final = list(self.active_playback_threads) # Check again
-        if active_threads_final: print(f"Warn: {len(active_threads_final)} playback threads might still be active after shutdown wait.")
-        else: print("All playback threads stopped or finished.")
+        self.stop_all_sounds()
 
         self.save_config(); # Save current state
         print("Soundboard App Finished.")
@@ -2112,9 +1896,9 @@ if __name__ == '__main__':
         sys.exit(1)
 
     # Check for essential audio libraries AFTER PySide6 check
-    try: import sounddevice; import soundfile; import numpy; import pydub
+    try: import sounddevice; import soundfile; import numpy
     except ImportError as core_audio_err:
-        error_message = (f"ERROR: Missing critical core audio libraries!\n\nMissing library: {core_audio_err.name}\n\nPlease ensure sounddevice, soundfile, numpy, pydub are installed.\nTry: pip install sounddevice soundfile numpy pydub")
+        error_message = (f"ERROR: Missing critical core audio libraries!\n\nMissing library: {core_audio_err.name}\n\nPlease ensure sounddevice, soundfile, numpy are installed.\nTry: pip install sounddevice soundfile numpy")
         print("\n" + "="*60 + f"\n{error_message}\n" + "="*60);
         # Attempt to show critical error popup (might use Tkinter)
         SoundboardWindow.show_critical_error_popup(None, "Missing Core Audio Libraries", error_message)
