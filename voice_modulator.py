@@ -21,7 +21,7 @@ try:
         QPushButton, QLabel, QLineEdit, QGridLayout, QScrollArea, QTabWidget,
         QDialog, QSlider, QComboBox, QDialogButtonBox, QFileDialog, QMenu,
         QStyleFactory, QMessageBox, QMenuBar, QInputDialog, QListWidget, QListWidgetItem,
-        QSpinBox, QCheckBox, QDoubleSpinBox
+    QSpinBox, QCheckBox, QDoubleSpinBox, QSizePolicy, QFormLayout
     )
     # Added QMetaObject, Q_ARG, Signal, QThread
     from PySide6.QtCore import Qt, QTimer, QSize, QMetaObject, Slot, Q_ARG, QPoint, QThread, Signal
@@ -91,7 +91,7 @@ except ImportError: pass
 CONFIG_FILENAME = "config.json"
 DEFAULT_CONFIG = {
     "version": "1.0",
-    "settings": { "scan_interval_minutes": 15, "input_device_name": "Default", "output_device_name": "Default", "stop_all_hotkey": None, "grid_columns": 5 },
+    "settings": { "scan_interval_minutes": 15, "input_device_name": "Default", "output_device_name": "Default", "stop_all_hotkey": None },
     "groups": [ {"id": "default", "name": "Default"} ],
     "sounds": []
 }
@@ -122,12 +122,19 @@ class SoundButton(QPushButton):
     def set_active(self, active):
         if self.is_active != active: self.is_active = active; self.update_appearance()
     def update_appearance(self):
-        base_style = "QPushButton { color: white; border: 1px solid #666; padding: 14px; font-size: 10pt; }"
+        base_style = "QPushButton { color: white; border: 1px solid #666; padding: 14px; font-size: 10pt; text-align: left; }"
         pressed_style = "QPushButton:pressed { background-color: #606060; }"
         hover_style = "QPushButton:hover { background-color: #5A5A5A; }"
-        if self.file_missing: self.setStyleSheet(base_style + "QPushButton { background-color: #802020; border: 1px solid red; }" + pressed_style + hover_style)
-        elif self.is_active: self.setStyleSheet(base_style + "QPushButton { background-color: #208020; border: 1px solid #00FF00; }" + pressed_style + hover_style)
-        else: self.setStyleSheet(base_style + "QPushButton { background-color: #505050; }" + pressed_style + hover_style)
+        name = self.sound_data.get("name", "Unnamed")
+        if self.file_missing:
+            self.setStyleSheet(base_style + "QPushButton { background-color: #802020; border: 1px solid red; }" + pressed_style + hover_style)
+            self.setText(f"[MISSING] {name}")
+        elif self.is_active:
+            self.setStyleSheet(base_style + "QPushButton { background-color: #208020; border: 1px solid #00FF00; }" + pressed_style + hover_style)
+            self.setText(f"[ACTIVE] {name}")
+        else:
+            self.setStyleSheet(base_style + "QPushButton { background-color: #505050; }" + pressed_style + hover_style)
+            self.setText(name)
     def contextMenuEvent(self, event):
         main_window = self.window()
         if isinstance(main_window, SoundboardWindow) and hasattr(main_window, 'show_context_menu_for_sound'):
@@ -138,7 +145,7 @@ class EditSoundDialog(QDialog):
     def __init__(self, sound_data, groups, parent=None):
         super().__init__(parent); self.sound_data_original = sound_data; self.sound_data_edited = copy.deepcopy(sound_data); self.groups = groups
         self.setWindowTitle(f"Edit Properties: {sound_data.get('name', '')}"); self.setMinimumWidth(450)
-        self.layout = QVBoxLayout(self); form_layout = QtWidgets.QFormLayout()
+        self.layout = QVBoxLayout(self); form_layout = QFormLayout()
         self.name_input = QLineEdit(self.sound_data_edited.get('name', '')); form_layout.addRow("Sound Name:", self.name_input)
         volume_layout = QHBoxLayout(); self.volume_slider = QSlider(Qt.Orientation.Horizontal); self.volume_slider.setRange(0, 150); self.volume_slider.setValue(int(self.sound_data_edited.get('volume', 1.0) * 100))
         self.volume_label = QLabel(f"{self.sound_data_edited.get('volume', 1.0):.2f}"); self.volume_slider.valueChanged.connect(lambda val: self.volume_label.setText(f"{val / 100.0:.2f}"))
@@ -575,13 +582,12 @@ class SettingsDialog(QDialog):
         self._capturing_stop_all = False
 
         self.setWindowTitle("Settings"); self.setMinimumWidth(400)
-        self.layout = QVBoxLayout(self); form_layout = QtWidgets.QFormLayout()
+        self.layout = QVBoxLayout(self); form_layout = QFormLayout()
 
         self.input_device_combo = QComboBox(); self.output_device_combo = QComboBox(); self.populate_devices();
         form_layout.addRow("Audio Input Device (Mic):", self.input_device_combo)
         form_layout.addRow("Audio Output Device (Virtual Cable):", self.output_device_combo)
         self.scan_spinbox = QSpinBox(); self.scan_spinbox.setRange(0, 1440); self.scan_spinbox.setValue(self.settings_edited.get('scan_interval_minutes', 15)); self.scan_spinbox.setSuffix(" minutes (0=disabled)"); form_layout.addRow("File Scan Interval:", self.scan_spinbox)
-        self.columns_spinbox = QSpinBox(); self.columns_spinbox.setRange(1, 20); self.columns_spinbox.setValue(self.settings_edited.get('grid_columns', 5)); form_layout.addRow("Grid Columns:", self.columns_spinbox)
 
         self.stop_hotkey_layout = QHBoxLayout()
         current_stop_hk = self.settings_edited.get('stop_all_hotkey')
@@ -787,7 +793,7 @@ class SettingsDialog(QDialog):
         self.stop_capture_listener() # Stop listener on accept
         selected_input_device_name = self.input_device_combo.currentData(); self.settings_edited['input_device_name'] = selected_input_device_name or "Default";
         selected_output_device_name = self.output_device_combo.currentData(); self.settings_edited['output_device_name'] = selected_output_device_name or "Default";
-        self.settings_edited['scan_interval_minutes'] = self.scan_spinbox.value(); self.settings_edited['grid_columns'] = self.columns_spinbox.value()
+        self.settings_edited['scan_interval_minutes'] = self.scan_spinbox.value()
         self.changes_made = (self.settings_edited != self.settings_original);
         if self.changes_made:
             self.settings_original.clear()
@@ -886,7 +892,7 @@ class SoundboardWindow(QMainWindow):
         self._file_check_event = None; self._current_popup = None
         self._tk_root = None
         self.load_config()
-        self.setWindowTitle("Live Soundboard v1.0"); self.setGeometry(100, 100, 800, 600); self.setMinimumSize(600, 400)
+        self.setWindowTitle("Live Voice Modulator v1.0"); self.setGeometry(100, 100, 800, 600); self.setMinimumSize(600, 400)
         self._setup_ui()
         self.apply_dark_theme()
 
@@ -918,14 +924,25 @@ class SoundboardWindow(QMainWindow):
         file_menu.addAction(settings_action); file_menu.addSeparator(); file_menu.addAction(backup_action); file_menu.addAction(restore_action); file_menu.addSeparator(); file_menu.addAction(exit_action)
         edit_menu = self.menu_bar.addMenu("&Edit"); manage_groups_action = QAction("Manage &Groups", self); manage_groups_action.triggered.connect(self.open_manage_groups_dialog); edit_menu.addAction(manage_groups_action)
         self.central_widget = QWidget(); self.setCentralWidget(self.central_widget); self.main_layout = QVBoxLayout(self.central_widget); self.main_layout.setContentsMargins(5, 5, 5, 5); self.main_layout.setSpacing(5)
-        top_bar_layout = QHBoxLayout(); self.search_input = QLineEdit(); self.search_input.setPlaceholderText("Search sounds in current tab...")
+        top_bar_layout = QHBoxLayout(); self.search_input = QLineEdit(); self.search_input.setPlaceholderText("Search sounds...")
         self.search_input.textChanged.connect(self.filter_sounds); self.add_button = QPushButton("Add Sound(s)"); self.add_button.setFixedWidth(120); self.add_button.clicked.connect(self.add_sound_dialog)
         top_bar_layout.addWidget(self.search_input); top_bar_layout.addWidget(self.add_button); self.main_layout.addLayout(top_bar_layout)
-        self.tab_widget = QTabWidget(); self.tab_widget.setMinimumHeight(200); self.tab_widget.currentChanged.connect(self.on_tab_changed); self.main_layout.addWidget(self.tab_widget, stretch=1)
+
+        self.main_scroll_area = QScrollArea()
+        self.main_scroll_area.setWidgetResizable(True)
+        self.main_scroll_area.setMinimumHeight(200)
+        self.scroll_content = QWidget()
+        self.scroll_layout = QVBoxLayout(self.scroll_content)
+        self.scroll_layout.setContentsMargins(5, 5, 5, 5)
+        self.scroll_layout.setSpacing(5)
+        self.scroll_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.main_scroll_area.setWidget(self.scroll_content)
+        self.main_layout.addWidget(self.main_scroll_area, stretch=1)
+
         self.status_label = QLabel("Status: Initializing..."); self.statusBar().addPermanentWidget(self.status_label)
         self.bottom_buttons_layout = QHBoxLayout()
         self.toggle_stream_button = QPushButton("Start Voice Modulator"); self.toggle_stream_button.setStyleSheet("background-color: #30A030; color: white;"); self.toggle_stream_button.clicked.connect(self.toggle_audio_stream)
-        self.stop_button = QPushButton("Clear All / Panic"); self.stop_button.setStyleSheet("background-color: #A03030; color: white;"); self.stop_button.clicked.connect(self.stop_all_sounds)
+        self.stop_button = QPushButton("Clear All / Panic"); self.stop_button.setStyleSheet("background-color: #A03030; color: white;"); self.stop_button.clicked.connect(self.deactivate_all_scenes)
         self.bottom_buttons_layout.addWidget(self.toggle_stream_button)
         self.bottom_buttons_layout.addWidget(self.stop_button)
         self.main_layout.addLayout(self.bottom_buttons_layout)
@@ -989,7 +1006,7 @@ class SoundboardWindow(QMainWindow):
                             idx = loop_data['index']
 
                             # Grab chunk from loop
-                            chunk = np.zeros_like(current_audio)
+                            volume = loop_data.get('volume', 1.0)
                             frames_filled = 0
 
                             while frames_filled < frames:
@@ -997,7 +1014,7 @@ class SoundboardWindow(QMainWindow):
                                 data_left_in_loop = loop_len - idx
 
                                 to_copy = min(space_left_in_chunk, data_left_in_loop)
-                                chunk[frames_filled:frames_filled+to_copy, 0] = loop_array[idx:idx+to_copy]
+                                current_audio[frames_filled:frames_filled+to_copy, 0] += loop_array[idx:idx+to_copy] * volume
 
                                 frames_filled += to_copy
                                 idx += to_copy
@@ -1006,8 +1023,6 @@ class SoundboardWindow(QMainWindow):
                                     idx = 0  # Loop back to beginning
 
                             loop_data['index'] = idx
-
-                            current_audio += (chunk * loop_data.get('volume', 1.0))
 
                     # 2. Apply Pedalboard Effects
                     if self._audio_board is not None:
@@ -1022,7 +1037,7 @@ class SoundboardWindow(QMainWindow):
                             loop_len = len(loop_array)
                             idx = loop_data['index']
 
-                            chunk = np.zeros_like(current_audio)
+                            volume = loop_data.get('volume', 1.0)
                             frames_filled = 0
 
                             while frames_filled < frames:
@@ -1030,7 +1045,7 @@ class SoundboardWindow(QMainWindow):
                                 data_left_in_loop = loop_len - idx
 
                                 to_copy = min(space_left_in_chunk, data_left_in_loop)
-                                chunk[frames_filled:frames_filled+to_copy, 0] = loop_array[idx:idx+to_copy]
+                                current_audio[frames_filled:frames_filled+to_copy, 0] += loop_array[idx:idx+to_copy] * volume
 
                                 frames_filled += to_copy
                                 idx += to_copy
@@ -1039,8 +1054,6 @@ class SoundboardWindow(QMainWindow):
                                     idx = 0  # Loop back to beginning
 
                             loop_data['index'] = idx
-
-                            current_audio += (chunk * loop_data.get('volume', 1.0))
 
                     outdata[:] = current_audio
 
@@ -1080,19 +1093,35 @@ class SoundboardWindow(QMainWindow):
     # --- Slots and Methods ---
     @Slot()
     def filter_sounds(self):
-        search_term = self.search_input.text().lower(); current_tab_widget = self.tab_widget.currentWidget();
-        if not current_tab_widget: return
-        scroll_area = current_tab_widget.findChild(QScrollArea);
-        if not scroll_area or not scroll_area.widget(): return
-        grid_container = scroll_area.widget(); grid_layout = grid_container.layout()
-        if not isinstance(grid_layout, QGridLayout): return
-        for i in range(grid_layout.count()):
-            widget = grid_layout.itemAt(i).widget()
-            if isinstance(widget, SoundButton): widget.setVisible(not search_term or search_term in widget.sound_data.get('name', '').lower())
+        search_term = self.search_input.text().lower()
+        if not self.scroll_layout: return
 
-    @Slot(int)
-    def on_tab_changed(self, index):
-        self.filter_sounds() # Re-apply filter when tab changes
+        # Go through all items in the scroll layout to filter buttons
+        # and keep track of which headers have visible buttons
+        current_header = None
+        header_has_visible_buttons = False
+
+        for i in range(self.scroll_layout.count()):
+            widget = self.scroll_layout.itemAt(i).widget()
+
+            if isinstance(widget, QLabel) and widget != self.status_label:
+                # We hit a new header. If we had a previous header, update its visibility
+                if current_header is not None:
+                    current_header.setVisible(header_has_visible_buttons)
+
+                # Reset for the new header
+                current_header = widget
+                header_has_visible_buttons = False
+
+            elif isinstance(widget, SoundButton):
+                is_visible = not search_term or search_term in widget.sound_data.get('name', '').lower()
+                widget.setVisible(is_visible)
+                if is_visible:
+                    header_has_visible_buttons = True
+
+        # Update visibility of the last header
+        if current_header is not None:
+            current_header.setVisible(header_has_visible_buttons)
 
     @Slot()
     def open_settings_dialog(self):
@@ -1169,7 +1198,7 @@ class SoundboardWindow(QMainWindow):
                     raise ValueError("Invalid or incomplete config file format.")
 
                 self._stop_hotkey_listener() # Stop listener before changing config
-                self.stop_all_sounds() # Stop sounds
+                self.deactivate_all_scenes() # Stop sounds
                 time.sleep(0.1) # Brief pause
 
                 self.config = loaded_config; # Replace current config
@@ -1307,34 +1336,26 @@ class SoundboardWindow(QMainWindow):
         print("Populating UI...")
         if not self.central_widget: print("ERROR: Central widget not ready in populate!"); return
         try:
-            current_tab_index = self.tab_widget.currentIndex()
-            self.tab_widget.clear(); self.sound_buttons.clear() # Clear tabs and button references
+            # Clear existing layout and button references
+            while self.scroll_layout.count():
+                layout_item = self.scroll_layout.takeAt(0)
+                if layout_item and layout_item.widget(): layout_item.widget().deleteLater()
+                elif layout_item and layout_item.layout():
+                    # Handle sub-layouts if any are added later
+                    pass
+            self.sound_buttons.clear()
 
             # Ensure default group exists in config before populating
             if not any(g.get('id') == 'default' for g in self.config.get('groups', [])):
                 self.config.setdefault('groups', []).insert(0, {"id": "default", "name": "Default"})
 
-            group_widgets = {} # Store {'group_id': {'tab': QWidget, 'grid': QGridLayout, 'container': QWidget}}
-            tab_index_map = {} # Store {'group_id': tab_index}
-            idx = 0
-            for group in self.config.get("groups", []):
-                group_id = group.get("id"); group_name = group.get("name", "Unnamed")
-                if not group_id: continue # Skip groups without ID
-
-                tab_content_widget = QWidget(); tab_layout = QVBoxLayout(tab_content_widget); tab_layout.setContentsMargins(0,0,0,0)
-                scroll_area = QScrollArea(); scroll_area.setWidgetResizable(True); scroll_area.setObjectName(f"scrollArea_{group_id}")
-                grid_container = QWidget(); grid_container.setObjectName(f"gridContainer_{group_id}"); grid_layout = QGridLayout(grid_container); grid_layout.setSpacing(5)
-                scroll_area.setWidget(grid_container); tab_layout.addWidget(scroll_area)
-
-                self.tab_widget.addTab(tab_content_widget, group_name);
-                group_widgets[group_id] = {'tab': tab_content_widget, 'grid': grid_layout, 'container': grid_container}
-                tab_index_map[group_id] = idx; idx += 1
-
-            num_columns = max(1, self.config.get('settings', {}).get('grid_columns', 5))
+            # Prepare groups list so we process in order
+            groups_order = self.config.get("groups", [])
+            valid_group_ids = {g.get('id') for g in groups_order if g.get('id')}
 
             # Prepare sounds per group
-            sounds_in_groups = {group_id: [] for group_id in group_widgets}
-            default_group_id_exists = "default" in group_widgets
+            sounds_in_groups = {group_id: [] for group_id in valid_group_ids}
+            default_group_id_exists = "default" in valid_group_ids
 
             for sound_data in self.config.get("sounds", []):
                 group_id = sound_data.get("group_id", "default");
@@ -1343,7 +1364,7 @@ class SoundboardWindow(QMainWindow):
                 if "absolute_path" not in sound_data and sound_data.get("relative_path"):
                     self._resolve_sound_paths() # Re-resolve might be needed here, inefficient but safe
 
-                target_group_id = group_id if group_id in group_widgets else "default"
+                target_group_id = group_id if group_id in valid_group_ids else "default"
 
                 if target_group_id in sounds_in_groups:
                     sounds_in_groups[target_group_id].append(sound_data)
@@ -1354,46 +1375,44 @@ class SoundboardWindow(QMainWindow):
                 else: # Should not happen if default group check above works
                     print(f"ERROR: Cannot assign sound '{sound_data.get('name')}' - group '{group_id}' missing and no Default group found!")
 
-            # Populate grids
-            for group_id, group_info in group_widgets.items():
-                grid_layout = group_info['grid']; grid_container = group_info['container']; col = 0; row = 0
+            # Populate vertical list
+            for group in groups_order:
+                group_id = group.get('id')
+                if not group_id: continue
 
-                # Clear existing widgets in the grid layout safely
-                while grid_layout.count():
-                    layout_item = grid_layout.takeAt(0)
-                    if layout_item and layout_item.widget(): layout_item.widget().deleteLater()
-
-                # Sort sounds alphabetically by name within each group
+                group_name = group.get('name', 'Unnamed')
                 sorted_sounds = sorted(sounds_in_groups.get(group_id, []), key=lambda s: s.get('name', '').lower())
 
-                for sound_data in sorted_sounds:
-                    sound_id = sound_data.get("id");
-                    if not sound_id: continue # Skip sounds without ID
+                if sorted_sounds:
+                    # Add a header for the group
+                    header = QLabel(f"<b>{group_name}</b>")
+                    header.setStyleSheet("color: #AAAAAA; font-size: 12pt; padding-top: 10px; padding-bottom: 5px;")
+                    self.scroll_layout.addWidget(header)
 
-                    # Ensure file_exists status is up-to-date
-                    if "absolute_path" in sound_data and "file_exists" not in sound_data:
-                        sound_data["file_exists"] = os.path.exists(sound_data["absolute_path"]) if sound_data["absolute_path"] else False
+                    for sound_data in sorted_sounds:
+                        sound_id = sound_data.get("id");
+                        if not sound_id: continue # Skip sounds without ID
 
-                    btn = SoundButton(sound_data);
-                    btn.set_file_missing(not sound_data.get("file_exists", False))
-                    if sound_id in self._active_scenes:
-                        btn.set_active(True)
-                    # Connect button click to the slot designed for button presses
-                    btn.clicked.connect(partial(self.play_sound_from_button, sound_id))
-                    grid_layout.addWidget(btn, row, col);
-                    self.sound_buttons[sound_id] = btn # Store reference
+                        # Ensure file_exists status is up-to-date
+                        if "absolute_path" in sound_data and "file_exists" not in sound_data:
+                            sound_data["file_exists"] = os.path.exists(sound_data["absolute_path"]) if sound_data["absolute_path"] else False
 
-                    col += 1;
-                    if col >= num_columns: col = 0; row += 1
+                        btn = SoundButton(sound_data);
+                        btn.set_file_missing(not sound_data.get("file_exists", False))
+                        if sound_id in self._active_scenes:
+                            btn.set_active(True)
+                        # Connect button click to the slot designed for button presses
+                        btn.clicked.connect(partial(self.toggle_scene_from_button, sound_id))
 
-                # Add stretch to push buttons to the top-left
-                grid_layout.setRowStretch(row + 1, 1); grid_layout.setColumnStretch(num_columns, 1)
+                        # Make it span full width in the vertical layout
+                        btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+                        self.scroll_layout.addWidget(btn)
+                        self.sound_buttons[sound_id] = btn # Store reference
 
-            # Restore previous tab index if valid
-            if 0 <= current_tab_index < self.tab_widget.count():
-                self.tab_widget.setCurrentIndex(current_tab_index)
+            # Add stretch at the end so items are pushed to top
+            self.scroll_layout.addStretch()
 
-            self.filter_sounds() # Apply search filter to the newly populated tabs
+            self.filter_sounds() # Apply search filter to the newly populated layout
             self.update_status("UI Populated.")
         except Exception as e: print(f"Error populating UI: {e}"); traceback.print_exc(); self.update_status(f"Error: Failed to populate UI! {e}")
 
@@ -1462,8 +1481,8 @@ class SoundboardWindow(QMainWindow):
         sound_data = self.find_sound_by_id(sound_id)
         if not sound_data: print(f"Delete Error: Sound ID {sound_id} not found."); return
         name = sound_data.get('name', 'Unknown')
-        reply = QtWidgets.QMessageBox.question(self, 'Confirm Delete', f"Are you sure you want to delete '{name}'?", QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No, QtWidgets.QMessageBox.StandardButton.No)
-        if reply == QtWidgets.QMessageBox.StandardButton.Yes:
+        reply = QMessageBox.question(self, 'Confirm Delete', f"Are you sure you want to delete '{name}'?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.Yes:
             print(f"Deleting sound: {name} ({sound_id})");
             original_hotkey_str = sound_data.get('hotkey')
             # Remove the sound from the list
@@ -1581,21 +1600,21 @@ class SoundboardWindow(QMainWindow):
 
     # Slot specifically for button clicks
     @Slot(str)
-    def play_sound_from_button(self, sound_id):
+    def toggle_scene_from_button(self, sound_id):
         """Slot called directly by button clicks."""
-        self._play_sound_internal(sound_id, source='button')
+        self._toggle_scene_internal(sound_id, source='button')
 
     # Slot specifically for invokeMethod from hotkey
     @Slot(str, str)
-    def play_sound_from_hotkey_qt(self, sound_id, source):
+    def toggle_scene_from_hotkey_qt(self, sound_id, source):
         """Slot called via QMetaObject.invokeMethod from hotkey trigger."""
         # We expect source to be 'hotkey' here
-        self._play_sound_internal(sound_id, source=source)
+        self._toggle_scene_internal(sound_id, source=source)
 
     # Internal playback logic
-    def _play_sound_internal(self, sound_id, source='unknown'):
-        """Internal logic to play sound, called by button or hotkey slots.
-           Now acts as a toggle for loops and effects."""
+    def _toggle_scene_internal(self, sound_id, source='unknown'):
+        """Internal logic to toggle scenes, called by button or hotkey slots.
+           Acts as a toggle for loops and effects."""
         sound_data = self.find_sound_by_id(sound_id)
         if not sound_data:
             print(f"Error: Sound ID {sound_id} not found.")
@@ -1707,7 +1726,7 @@ class SoundboardWindow(QMainWindow):
             self._rebuild_pedalboard()
 
     @Slot()
-    def stop_all_sounds(self):
+    def deactivate_all_scenes(self):
         print("Panic / Stop All triggered.")
         self._active_scenes.clear()
 
@@ -1897,7 +1916,7 @@ class SoundboardWindow(QMainWindow):
                     print(f"[Hotkey Listener] Stop All hotkey '{current_combo_str}' detected.")
                     # Use QTimer for stop all, as it's less critical than sound trigger timing
                     # and avoids potential invokeMethod complexity if stop_all itself takes time.
-                    QTimer.singleShot(0, self.stop_all_sounds)
+                    QTimer.singleShot(0, self.deactivate_all_scenes)
 
         except Exception as e:
             print(f"ERROR in pynput _on_press: {e}"); traceback.print_exc()
@@ -2005,7 +2024,7 @@ class SoundboardWindow(QMainWindow):
             # Target the specific slot designed for this on the main window object (self)
             QMetaObject.invokeMethod(
                 self,
-                "play_sound_from_hotkey_qt", # Name (as string) of the target @Slot
+                "toggle_scene_from_hotkey_qt", # Name (as string) of the target @Slot
                 Qt.ConnectionType.QueuedConnection, # Ensures execution in the main event loop
                 Q_ARG(str, sound_id), # Argument 1 for the slot
                 Q_ARG(str, 'hotkey')  # Argument 2 for the slot
@@ -2210,7 +2229,7 @@ class SoundboardWindow(QMainWindow):
 
         if self.file_check_timer.isActive(): print("Stopping file check timer."); self.file_check_timer.stop()
 
-        self.stop_all_sounds()
+        self.deactivate_all_scenes()
 
         self.save_config(); # Save current state
         print("Soundboard App Finished.")
