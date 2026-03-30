@@ -164,6 +164,7 @@ class EditSoundDialog(QDialog):
             if _pb_delay_ok: defined_effects.append("Delay")
             if _pb_distortion_ok: defined_effects.append("Distortion")
             if _pb_bitcrush_ok: defined_effects.append("Bitcrush")
+            defined_effects.append("VST3 Plugin")
         current_effects_list = self.sound_data_edited.get('effects', [])
         current_effects_map = {fx.get('type'): fx for fx in current_effects_list}
         updated_effects_list = []
@@ -176,6 +177,7 @@ class EditSoundDialog(QDialog):
                 elif fx_type == "Delay": default_params = {"delay_seconds": 0.3, "feedback": 0.4}
                 elif fx_type == "Distortion": default_params = {"drive_db": 25.0}
                 elif fx_type == "Bitcrush": default_params = {"bit_depth": 8.0}
+                elif fx_type == "VST3 Plugin": default_params = {"plugin_path": ""}
                 updated_effects_list.append({"type": fx_type, "enabled": False, "params": default_params})
         self.sound_data_edited['effects'] = updated_effects_list
         for effect_data in self.sound_data_edited['effects']:
@@ -195,6 +197,28 @@ class EditSoundDialog(QDialog):
                 slider_drv.valueChanged.connect(lambda val, l=label_drv: l.setText(f"{val/10.0:.1f}")); params_layout.addWidget(slider_drv); params_layout.addWidget(label_drv); self.effects_widgets[fx_type]['params']['drive_db'] = {'widget': slider_drv, 'label': label_drv}
             elif fx_type == "Bitcrush":
                 params_layout.addWidget(QLabel("Bit Depth:")); spinbox_bc = QSpinBox(); spinbox_bc.setRange(1, 32); spinbox_bc.setValue(int(effect_data.get("params", {}).get("bit_depth", 8.0))); params_layout.addWidget(spinbox_bc); self.effects_widgets[fx_type]['params']['bit_depth'] = {'widget': spinbox_bc}
+            elif fx_type == "VST3 Plugin":
+                plugin_path = effect_data.get("params", {}).get("plugin_path", "")
+                plugin_state = effect_data.get("params", {}).get("plugin_state", None)
+
+                path_label = QLabel(os.path.basename(plugin_path) if plugin_path else "No Plugin Loaded")
+                path_label.setFixedWidth(120)
+                load_btn = QPushButton("Load VST3...")
+
+                # Use default arguments in lambda to capture the current label and effect_data
+                load_btn.clicked.connect(lambda checked=False, l=path_label, ed=effect_data: self.load_vst3(l, ed))
+
+                # New Button: Show Plugin GUI (Only enable if pedalboard is active and a valid path exists)
+                show_gui_btn = QPushButton("Show GUI")
+                show_gui_btn.clicked.connect(lambda checked=False: self.show_vst3_gui())
+                show_gui_btn.setEnabled(bool(plugin_path) and _AUDIO_LIBS_LOADED and pedalboard is not None)
+
+                params_layout.addWidget(path_label)
+                params_layout.addWidget(load_btn)
+                params_layout.addWidget(show_gui_btn)
+
+                self.effects_widgets[fx_type]['params']['plugin_path'] = {'label': path_label, 'button': load_btn, 'show_gui_button': show_gui_btn, 'current_path': plugin_path, 'current_state': plugin_state}
+
             fx_box.addLayout(params_layout); effects_layout.addLayout(fx_box)
         self.layout.addLayout(effects_layout); self.layout.addStretch()
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel); self.button_box.accepted.connect(self.accept); self.button_box.rejected.connect(self.reject); self.layout.addWidget(self.button_box)
@@ -214,6 +238,9 @@ class EditSoundDialog(QDialog):
                     new_effect_data['params']['feedback'] = round(widgets['params']['feedback']['widget'].value() / 100.0, 3)
                 elif fx_type == "Distortion": new_effect_data['params']['drive_db'] = round(widgets['params']['drive_db']['widget'].value() / 10.0, 1)
                 elif fx_type == "Bitcrush": new_effect_data['params']['bit_depth'] = float(widgets['params']['bit_depth']['widget'].value())
+                elif fx_type == "VST3 Plugin":
+                    new_effect_data['params']['plugin_path'] = widgets['params']['plugin_path']['current_path']
+                    new_effect_data['params']['plugin_state'] = widgets['params']['plugin_path']['current_state']
                 updated_effects.append(new_effect_data)
             else:
                 updated_effects.append(effect_data)
@@ -223,6 +250,83 @@ class EditSoundDialog(QDialog):
             self.sound_data_original.clear()
             self.sound_data_original.update(self.sound_data_edited)
         super().accept()
+    def load_vst3(self, label, effect_data):
+        dialog = QFileDialog(self)
+        dialog.setWindowTitle("Select VST3 Plugin")
+        dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
+        dialog.setNameFilter("VST3 Plugins (*.vst3)")
+
+        if dialog.exec():
+            selected_file = dialog.selectedFiles()[0]
+            label.setText(os.path.basename(selected_file))
+            self.effects_widgets["VST3 Plugin"]['params']['plugin_path']['current_path'] = selected_file
+
+            # Re-enable the Show GUI button
+            gui_btn = self.effects_widgets["VST3 Plugin"]['params']['plugin_path']['show_gui_button']
+            gui_btn.setEnabled(_AUDIO_LIBS_LOADED and pedalboard is not None)
+
+            # Optional: Test load it right now so we can show its UI immediately from the edit dialog
+            try:
+                if _AUDIO_LIBS_LOADED and pedalboard:
+                    # Just to test if it loads
+                    temp_plugin = pedalboard.load_plugin(selected_file)
+            except Exception as e:
+                QMessageBox.warning(self, "Plugin Error", f"Failed to load VST3 plugin:\n{e}")
+                label.setText("No Plugin Loaded")
+                self.effects_widgets["VST3 Plugin"]['params']['plugin_path']['current_path'] = ""
+                gui_btn.setEnabled(False)
+
+    def show_vst3_gui(self):
+        plugin_path = self.effects_widgets["VST3 Plugin"]['params']['plugin_path']['current_path']
+        plugin_state = self.effects_widgets["VST3 Plugin"]['params']['plugin_path']['current_state']
+
+        if not plugin_path or not os.path.exists(plugin_path):
+            QMessageBox.warning(self, "Error", "Invalid VST3 plugin path.")
+            return
+
+        try:
+            if _AUDIO_LIBS_LOADED and pedalboard:
+                # Load an instance just to show the UI
+                temp_plugin = pedalboard.load_plugin(plugin_path)
+
+                # Restore previous state if available
+                if plugin_state:
+                    # state is usually bytes, but json serialization might convert it.
+                    # Attempt to handle different types gracefully
+                    try:
+                        # Depending on how the state was serialized, it might be a hex string or list
+                        import base64
+                        if isinstance(plugin_state, str):
+                            temp_plugin.raw_state = base64.b64decode(plugin_state)
+                        else:
+                            temp_plugin.raw_state = plugin_state
+                    except Exception as e:
+                        print(f"Failed to restore plugin state: {e}")
+
+                # show_editor() blocks the thread until closed. We must run it in a background thread.
+                def _run_editor(plugin, widget_state_dict):
+                    try:
+                        plugin.show_editor()
+
+                        # Save the new state back to the widget's temporary state once closed
+                        import base64
+                        state_bytes = plugin.raw_state
+                        if state_bytes:
+                            # Encode as base64 string to be JSON serializable
+                            widget_state_dict['current_state'] = base64.b64encode(state_bytes).decode('utf-8')
+                    except Exception as e:
+                        print(f"Error in VST3 editor thread: {e}")
+
+                editor_thread = threading.Thread(
+                    target=_run_editor,
+                    args=(temp_plugin, self.effects_widgets["VST3 Plugin"]['params']['plugin_path']),
+                    daemon=True
+                )
+                editor_thread.start()
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to open plugin GUI:\n{e}")
+
     def get_updated_sound_data(self):
         return self.sound_data_original if self.result() == QDialog.DialogCode.Accepted and hasattr(self, 'changes_made') and self.changes_made else None
 
@@ -1568,6 +1672,21 @@ class SoundboardWindow(QMainWindow):
                         scene_effects.append(pedalboard.Distortion(drive_db=params.get("drive_db", 25.0)))
                     elif fx_type == "Bitcrush" and _pb_bitcrush_ok:
                         scene_effects.append(pedalboard.Bitcrush(bit_depth=params.get("bit_depth", 8.0)))
+                    elif fx_type == "VST3 Plugin":
+                        plugin_path = params.get("plugin_path")
+                        plugin_state = params.get("plugin_state")
+                        if plugin_path and os.path.exists(plugin_path):
+                            loaded_vst = pedalboard.load_plugin(plugin_path)
+                            if plugin_state:
+                                try:
+                                    import base64
+                                    if isinstance(plugin_state, str):
+                                        loaded_vst.raw_state = base64.b64decode(plugin_state)
+                                    else:
+                                        loaded_vst.raw_state = plugin_state
+                                except Exception as e:
+                                    print(f"Error restoring VST3 state: {e}")
+                            scene_effects.append(loaded_vst)
                 except Exception as e:
                     print(f"Error creating effect {fx_type}: {e}")
 
