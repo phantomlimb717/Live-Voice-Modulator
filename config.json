@@ -1,0 +1,1320 @@
+{
+    "version": "1.0",
+    "settings": {
+        "scan_interval_minutes": 15,
+        "output_device_name": "CABLE-B Input (VB-Audio Virtual Cable B)",
+        "stop_all_hotkey": "shift+q",
+        "grid_columns": 4
+    },
+    "groups": [
+        {
+            "id": "default",
+            "name": "Default",
+            "default_color": null
+        },
+        {
+            "id": "group_9971e499",
+            "name": "Arnold",
+            "default_color": null
+        },
+        {
+            "id": "group_b3919592",
+            "name": "Tones"
+        },
+        {
+            "id": "group_926aa417",
+            "name": "China"
+        },
+        {
+            "id": "group_92c69fa9",
+            "name": "DJ"
+        },
+        {
+            "id": "group_a93c8fc5",
+            "name": "Bros"
+        },
+        {
+            "id": "group_b5a1b4d5",
+            "name": "TheWire"
+        }
+    ],
+    "sounds": [
+        {
+            "id": "snd_fb27489a8986",
+            "name": "You Idiot!",
+            "relative_path": "sounds\\idiot.mp3",
+            "volume": 1.0,
+            "group_id": "group_9971e499",
+            "hotkey": "ctrl+shift+4",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ],
+            "custom_color": null
+        },
+        {
+            "id": "snd_cea883768400",
+            "name": "Out Of Your Mind",
+            "relative_path": "sounds\\outofmind.mp3",
+            "volume": 1.0,
+            "group_id": "group_9971e499",
+            "hotkey": "ctrl+shift+2",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ],
+            "custom_color": null
+        },
+        {
+            "id": "snd_5eabd587f6e8",
+            "name": "Hahahahaha",
+            "relative_path": "sounds\\haha.mp3",
+            "volume": 1.0,
+            "group_id": "default",
+            "hotkey": "ctrl+4",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": true,
+                    "params": {
+                        "delay_seconds": 0.2,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_7b400e657aa3",
+            "name": "No",
+            "relative_path": "sounds\\no-1.mp3",
+            "volume": 1.0,
+            "group_id": "default",
+            "hotkey": "ctrl+2",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_dff243f927eb",
+            "name": "Nooo",
+            "relative_path": "sounds\\no-3.mp3",
+            "volume": 1.0,
+            "group_id": "default",
+            "hotkey": "ctrl+3",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_2a611a5eb16b",
+            "name": "I Was Wrong",
+            "relative_path": "sounds\\sorry-3.mp3",
+            "volume": 1.0,
+            "group_id": "default",
+            "hotkey": "ctrl+6",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_3cca76a36d15",
+            "name": "Who Are You??",
+            "relative_path": "sounds\\whoru-1.mp3",
+            "volume": 1.0,
+            "group_id": "default",
+            "hotkey": "ctrl+f1",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_52eae95b4d42",
+            "name": "Get To Know You",
+            "relative_path": "sounds\\knowu.mp3",
+            "volume": 1.0,
+            "group_id": "default",
+            "hotkey": "ctrl+f2",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.2,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_fae4d76701a1",
+            "name": "Who Is Your Daddy",
+            "relative_path": "sounds\\daddy.mp3",
+            "volume": 1.0,
+            "group_id": "group_9971e499",
+            "hotkey": "ctrl+shift+3",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": true,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_b183a848f6cc",
+            "name": "Yes",
+            "relative_path": "sounds\\yes1.mp3",
+            "volume": 1.0,
+            "group_id": "default",
+            "hotkey": "ctrl+1",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_e25bea60a057",
+            "name": "Hiii",
+            "relative_path": "sounds\\hi-2.mp3",
+            "volume": 1.0,
+            "group_id": "default",
+            "hotkey": "ctrl+f3",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_b9fe92b78330",
+            "name": "What The Fuck?!",
+            "relative_path": "sounds\\wtf-1.mp3",
+            "volume": 1.0,
+            "group_id": "default",
+            "hotkey": "ctrl+5",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_0a67efcca9d8",
+            "name": "Cocaienum",
+            "relative_path": "sounds\\cocaine-5.mp3",
+            "volume": 1.0,
+            "group_id": "group_9971e499",
+            "hotkey": "ctrl+shift+1",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_7914786412e8",
+            "name": "Touch Tones",
+            "relative_path": "sounds\\tones.mp3",
+            "volume": 1.0,
+            "group_id": "group_b3919592",
+            "hotkey": "alt+x",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_5c1dbe3bb46b",
+            "name": "china01",
+            "relative_path": "sounds\\china01.mp3",
+            "volume": 1.0,
+            "group_id": "group_926aa417",
+            "hotkey": "alt+6",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_a7ce2b295575",
+            "name": "CHYNAA",
+            "relative_path": "sounds\\CHYNAA.mp3",
+            "volume": 1.0,
+            "group_id": "group_926aa417",
+            "hotkey": "alt+8",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_4f38464a935f",
+            "name": "CHINA",
+            "relative_path": "sounds\\CHINA.mp3",
+            "volume": 1.0,
+            "group_id": "group_926aa417",
+            "hotkey": "alt+5",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_0350eaf0c5be",
+            "name": "HaveToHaveMyChina",
+            "relative_path": "sounds\\HaveToHaveMyChina.mp3",
+            "volume": 1.0,
+            "group_id": "group_926aa417",
+            "hotkey": "alt+4",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_026d201a8a21",
+            "name": "China-Question",
+            "relative_path": "sounds\\China-Question.mp3",
+            "volume": 1.0,
+            "group_id": "group_926aa417",
+            "hotkey": "alt+3",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_07dce372cba4",
+            "name": "China I Love Em",
+            "relative_path": "sounds\\China I Love Em.mp3",
+            "volume": 1.0,
+            "group_id": "group_926aa417",
+            "hotkey": "alt+2",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_2859e28e8e92",
+            "name": "China Applause",
+            "relative_path": "sounds\\China Applause.mp3",
+            "volume": 1.5,
+            "group_id": "group_926aa417",
+            "hotkey": "alt+1",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": true,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_675bc5757b23",
+            "name": "China02",
+            "relative_path": "sounds\\China02.mp3",
+            "volume": 1.0,
+            "group_id": "group_926aa417",
+            "hotkey": "alt+7",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_4d2b95116c23",
+            "name": "Vuvuzela",
+            "relative_path": "sounds\\Vuvuzela.mp3",
+            "volume": 0.12,
+            "group_id": "group_92c69fa9",
+            "hotkey": "shift+%",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.99
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": true,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.93
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_c310101d72e1",
+            "name": "Smoke Detector Chirp",
+            "relative_path": "sounds\\Smoke Detector Chirp.mp3",
+            "volume": 1.0,
+            "group_id": "group_92c69fa9",
+            "hotkey": null,
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_eb3de09dd898",
+            "name": "Fire In The Booth",
+            "relative_path": "sounds\\Fire In The Booth Siren Sound Effect.mp3",
+            "volume": 1.5,
+            "group_id": "group_92c69fa9",
+            "hotkey": "shift+@",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_d6446f18c8e4",
+            "name": "DJ Airhorn",
+            "relative_path": "sounds\\DJ Airhorn Sound Effect 001.mp3",
+            "volume": 1.0,
+            "group_id": "group_92c69fa9",
+            "hotkey": null,
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": true,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_0d8e83d2c68a",
+            "name": "metal pipe falling sound effect",
+            "relative_path": "sounds\\metal pipe falling sound effect.mp3",
+            "volume": 1.0,
+            "group_id": "group_92c69fa9",
+            "hotkey": "shift+#",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_62d0c0e6bb0f",
+            "name": "Pull Up!",
+            "relative_path": "sounds\\Pull Up!.mp3",
+            "volume": 1.0,
+            "group_id": "group_92c69fa9",
+            "hotkey": "shift+$",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.6
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.55
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_583087cd01cb",
+            "name": "1000",
+            "relative_path": "..\\Desktop\\1000.mp3",
+            "volume": 1.0,
+            "group_id": "group_92c69fa9",
+            "hotkey": null,
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_b4383fcccb58",
+            "name": "Howdy Stranger - MAX REVERB",
+            "relative_path": "sounds\\howdy.mp3",
+            "volume": 1.0,
+            "group_id": "default",
+            "hotkey": "ctrl+f4",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.92
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.86
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_b6b56c850399",
+            "name": "cookies-3",
+            "relative_path": "sounds\\cookies-3.mp3",
+            "volume": 1.0,
+            "group_id": "group_9971e499",
+            "hotkey": "ctrl+9",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_391f9122efb9",
+            "name": "cookies-2",
+            "relative_path": "sounds\\cookies-2.mp3",
+            "volume": 1.0,
+            "group_id": "group_9971e499",
+            "hotkey": "ctrl+8",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_fe18129ef9ba",
+            "name": "cookies",
+            "relative_path": "sounds\\cookies.mp3",
+            "volume": 1.0,
+            "group_id": "group_9971e499",
+            "hotkey": "ctrl+7",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_5d96d7fff599",
+            "name": "Uhhh",
+            "relative_path": "sounds\\a.aac",
+            "volume": 1.0,
+            "group_id": "group_a93c8fc5",
+            "hotkey": "alt+shift+%",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_3e78504848d4",
+            "name": "Meeeeebeeee",
+            "relative_path": "sounds\\c.aac",
+            "volume": 1.0,
+            "group_id": "group_a93c8fc5",
+            "hotkey": null,
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_51b5f530eb29",
+            "name": "OMGOMD",
+            "relative_path": "sounds\\d.aac",
+            "volume": 1.0,
+            "group_id": "group_a93c8fc5",
+            "hotkey": null,
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_97106eae29ad",
+            "name": "Beast",
+            "relative_path": "sounds\\g.aac",
+            "volume": 1.03,
+            "group_id": "group_a93c8fc5",
+            "hotkey": "alt+shift+#",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_7896eff70132",
+            "name": "AMABEAST",
+            "relative_path": "sounds\\h.aac",
+            "volume": 1.0,
+            "group_id": "group_a93c8fc5",
+            "hotkey": null,
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_877512f97ba3",
+            "name": "HERE",
+            "relative_path": "sounds\\i.aac",
+            "volume": 1.0,
+            "group_id": "group_a93c8fc5",
+            "hotkey": null,
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_3099666f7392",
+            "name": "PANSY",
+            "relative_path": "sounds\\j.aac",
+            "volume": 1.0,
+            "group_id": "group_a93c8fc5",
+            "hotkey": "alt+shift+$",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_16c973f21e32",
+            "name": "The Wire Bullshit",
+            "relative_path": "sounds\\The Wire Bullshit.mp3",
+            "volume": 1.5,
+            "group_id": "group_b5a1b4d5",
+            "hotkey": "alt+ctrl+5",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_3b939ea0949b",
+            "name": "DOBY",
+            "relative_path": "sounds\\DOBY.mp3",
+            "volume": 1.5,
+            "group_id": "group_b5a1b4d5",
+            "hotkey": "alt+ctrl+8",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.67
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_b99d8fe8af0f",
+            "name": "paymeafee",
+            "relative_path": "sounds\\paymeafee.mp3",
+            "volume": 1.0,
+            "group_id": "group_b5a1b4d5",
+            "hotkey": "alt+ctrl+2",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_be7b6280a1d2",
+            "name": "UPINMYsheeet",
+            "relative_path": "sounds\\UPINMYsheeet.mp3",
+            "volume": 1.0,
+            "group_id": "group_b5a1b4d5",
+            "hotkey": "alt+ctrl+3",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_a1d681870461",
+            "name": "SHEEEIT",
+            "relative_path": "sounds\\SHEEEIT.mp3",
+            "volume": 1.0,
+            "group_id": "group_b5a1b4d5",
+            "hotkey": "alt+ctrl+4",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_868c94d150f3",
+            "name": "sheeeeit",
+            "relative_path": "sounds\\sheeeeit.mp3",
+            "volume": 1.5,
+            "group_id": "group_b5a1b4d5",
+            "hotkey": null,
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_e8693abb6d96",
+            "name": "moneylaundering",
+            "relative_path": "sounds\\moneylaundering.mp3",
+            "volume": 1.5,
+            "group_id": "group_b5a1b4d5",
+            "hotkey": "alt+ctrl+1",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_5147b327c0d2",
+            "name": "SHIIT",
+            "relative_path": "sounds\\SHIIT.mp3",
+            "volume": 1.0,
+            "group_id": "group_b5a1b4d5",
+            "hotkey": null,
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_eca2f8f3a938",
+            "name": "gorilla2",
+            "relative_path": "sounds\\gorilla2.mp3",
+            "volume": 1.0,
+            "group_id": "group_a93c8fc5",
+            "hotkey": "alt+shift+@",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_7e3b8f63b7c7",
+            "name": "gorilla01",
+            "relative_path": "sounds\\gorilla01.mp3",
+            "volume": 1.0,
+            "group_id": "group_a93c8fc5",
+            "hotkey": "alt+shift+!",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": false,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        },
+        {
+            "id": "snd_fa45d9c03b03",
+            "name": "MomsBentOver",
+            "relative_path": "sounds\\MomsBentOver.mp3",
+            "volume": 1.0,
+            "group_id": "group_a93c8fc5",
+            "hotkey": "alt+shift+^",
+            "effects": [
+                {
+                    "type": "Reverb",
+                    "enabled": true,
+                    "params": {
+                        "room_size": 0.5
+                    }
+                },
+                {
+                    "type": "Delay",
+                    "enabled": false,
+                    "params": {
+                        "delay_seconds": 0.3,
+                        "feedback": 0.4
+                    }
+                }
+            ]
+        }
+    ]
+}

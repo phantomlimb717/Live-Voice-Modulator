@@ -1,0 +1,7 @@
+PySide6
+sounddevice
+soundfile
+numpy
+pydub
+pedalboard
+pynput

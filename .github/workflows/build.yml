@@ -1,0 +1,108 @@
+name: Build Soundboard Application
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.11'
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller
+    - name: Build with PyInstaller
+      run: |
+        pyinstaller --noconfirm --onefile --windowed --name "Soundboard" --add-data "config.json;." "soundboard.py"
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: Soundboard-Windows
+        path: dist/Soundboard.exe
+
+  build-macos-x86_64:
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install Rosetta 2
+        run: |
+          if ! pgrep -q oahd; then
+            sudo softwareupdate --install-rosetta --agree-to-license
+          fi
+
+      - name: Set up x86_64 environment
+        run: |
+          arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          arch -x86_64 /usr/local/bin/brew install python3 ffmpeg
+          echo "PATH=$(arch -x86_64 /usr/local/bin/brew --prefix)/bin:$PATH" >> $GITHUB_ENV
+
+      - name: Install Python dependencies (x86_64)
+        run: |
+          arch -x86_64 python3 -m pip install --upgrade pip
+          arch -x86_64 pip3 install -r requirements.txt
+          arch -x86_64 pip3 install pyinstaller
+
+      - name: Build with PyInstaller (x86_64)
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '11.0'
+        run: |
+          arch -x86_64 pyinstaller --noconfirm --windowed --name "Soundboard" --add-data "config.json:." "soundboard.py" --target-arch x86_64
+
+      - name: Create DMG file
+        run: |
+          hdiutil create ./Soundboard-x86_64.dmg -srcfolder dist/Soundboard.app -ov
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Soundboard-macOS-x86_64
+          path: Soundboard-x86_64.dmg
+
+  build-macos-arm64:
+    runs-on: macos-15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.11'
+
+      - name: Install FFmpeg
+        run: brew install ffmpeg
+
+      - name: Install dependencies (arm64)
+        run: |
+          python3 -m pip install --upgrade pip
+          pip3 install -r requirements.txt
+          pip3 install pyinstaller
+
+      - name: Build with PyInstaller (arm64)
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '11.0'
+        run: |
+          pyinstaller --noconfirm --windowed --name "Soundboard" --add-data "config.json:." "soundboard.py" --target-arch arm64
+
+      - name: Create DMG file
+        run: |
+          hdiutil create ./Soundboard-arm64.dmg -srcfolder dist/Soundboard.app -ov
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Soundboard-macOS-arm64
+          path: Soundboard-arm64.dmg
