@@ -1192,6 +1192,7 @@ class VoiceModulatorWindow(QMainWindow):
         self._active_loops = {} # dict mapping sound_id to {"array": numpy_array, "index": int, "routing": str, "volume": float}
         self._active_effects = {} # dict mapping sound_id to list of pedalboard effect objects
         self._audio_lock = threading.Lock() # To protect state changes during audio callback
+        self._current_blocksize = 512 # Keep track of the active blocksize
 
         if pedalboard and hasattr(pedalboard, 'Pedalboard'):
              self._audio_board = pedalboard.Pedalboard([]) # Start with an empty board for Phase 1
@@ -1279,6 +1280,12 @@ class VoiceModulatorWindow(QMainWindow):
         else:
             self.start_audio_stream()
 
+    @Slot()
+    def restart_audio_stream(self):
+        if self._audio_stream and self._audio_stream.active:
+            self.stop_audio_stream()
+            self.start_audio_stream()
+
     def start_audio_stream(self):
         if not _AUDIO_LIBS_LOADED:
             self.show_error_popup("Audio Error", "Audio libraries not loaded. Cannot start stream.")
@@ -1308,7 +1315,17 @@ class VoiceModulatorWindow(QMainWindow):
 
         try:
             # We use blocksize 512 for balance of latency and stability, 48000 Hz is standard
+            # However, plugins like PitchShift (RubberBand) need larger blocks to function correctly.
             sample_rate = 48000
+
+            blocksize = 512
+            if self._audio_board is not None:
+                for plugin in self._audio_board:
+                    if _pb_pitchshift_ok and isinstance(plugin, pedalboard.PitchShift):
+                        blocksize = 4096
+                        break
+
+            self._current_blocksize = blocksize
 
             def stream_callback(indata, outdata, frames, time, status):
                 if status:
@@ -1390,7 +1407,7 @@ class VoiceModulatorWindow(QMainWindow):
             self._audio_stream = sd.Stream(
                 device=(input_dev_idx, output_dev_idx),
                 samplerate=sample_rate,
-                blocksize=512,
+                blocksize=blocksize,
                 dtype=np.float32,
                 channels=channels,
                 callback=stream_callback
@@ -1985,6 +2002,23 @@ class VoiceModulatorWindow(QMainWindow):
 
         with self._audio_lock:
             self._audio_board = pedalboard.Pedalboard(chain)
+
+        # Check if blocksize needs to be updated (e.g. PitchShift added/removed)
+        if self._audio_stream and self._audio_stream.active:
+            required_blocksize = 512
+            if self._audio_board is not None:
+                for plugin in self._audio_board:
+                    if _pb_pitchshift_ok and isinstance(plugin, pedalboard.PitchShift):
+                        required_blocksize = 4096
+                        break
+
+            if getattr(self, '_current_blocksize', 512) != required_blocksize:
+                print(f"Restarting audio stream to change blocksize to {required_blocksize}")
+                # We need to restart on the main thread, but _rebuild_pedalboard is usually called on main thread anyway
+                # But to be safe if called from background thread (like VST3), use singleShot or invokeMethod.
+                # Since _rebuild_pedalboard is a Slot and mostly invoked safely, we can stop/start here.
+                # However, to avoid deadlocks with _audio_lock during stream.stop(), we use QTimer.
+                QMetaObject.invokeMethod(self, "restart_audio_stream", Qt.ConnectionType.QueuedConnection)
 
     def _activate_scene(self, sound_id, sound_data):
         print(f"Activating Scene: {sound_data.get('name')}")
