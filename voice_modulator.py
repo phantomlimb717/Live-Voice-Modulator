@@ -21,7 +21,7 @@ try:
         QPushButton, QLabel, QLineEdit, QScrollArea,
         QDialog, QSlider, QComboBox, QDialogButtonBox, QFileDialog, QMenu,
         QStyleFactory, QMessageBox, QMenuBar, QInputDialog, QListWidget, QListWidgetItem,
-        QSpinBox, QCheckBox, QDoubleSpinBox, QSizePolicy, QFormLayout
+        QSpinBox, QCheckBox, QDoubleSpinBox, QSizePolicy, QFormLayout, QGroupBox, QGridLayout
     )
     # Added QMetaObject, Q_ARG, Signal, QThread
     from PySide6.QtCore import Qt, QTimer, QSize, QMetaObject, Slot, Q_ARG, QPoint, QThread, Signal
@@ -937,25 +937,108 @@ class VoiceModulatorWindow(QMainWindow):
         top_bar_layout.addWidget(self.search_input); top_bar_layout.addWidget(self.add_button); self.main_layout.addLayout(top_bar_layout)
 
         # Global Effects
-        self.global_effects_layout = QHBoxLayout()
-        self.global_reverb_cb = QCheckBox("Reverb")
-        self.global_delay_cb = QCheckBox("Delay")
-        self.global_distortion_cb = QCheckBox("Distortion")
-        self.global_bitcrush_cb = QCheckBox("Bitcrush")
+        self.global_effects_group = QGroupBox("Global Effects")
+        self.global_effects_layout = QGridLayout(self.global_effects_group)
 
-        self.global_effects_layout.addWidget(QLabel("Global Effects:"))
-        self.global_effects_layout.addWidget(self.global_reverb_cb)
-        self.global_effects_layout.addWidget(self.global_delay_cb)
-        self.global_effects_layout.addWidget(self.global_distortion_cb)
-        self.global_effects_layout.addWidget(self.global_bitcrush_cb)
-        self.global_effects_layout.addStretch()
+        # Reverb
+        self.global_reverb_cb = QCheckBox("Reverb")
+        self.global_reverb_slider = QSlider(Qt.Orientation.Horizontal)
+        self.global_reverb_slider.setRange(0, 100)
+        self.global_reverb_slider.setValue(50)
+        self.global_reverb_label = QLabel(f"Room Size: {self.global_reverb_slider.value()/100.0:.2f}")
+
+        self.global_effects_layout.addWidget(self.global_reverb_cb, 0, 0)
+        self.global_effects_layout.addWidget(self.global_reverb_slider, 0, 1)
+        self.global_effects_layout.addWidget(self.global_reverb_label, 0, 2)
 
         self.global_reverb_cb.toggled.connect(self._rebuild_pedalboard)
-        self.global_delay_cb.toggled.connect(self._rebuild_pedalboard)
-        self.global_distortion_cb.toggled.connect(self._rebuild_pedalboard)
-        self.global_bitcrush_cb.toggled.connect(self._rebuild_pedalboard)
+        self.global_reverb_slider.valueChanged.connect(lambda val: self.global_reverb_label.setText(f"Room Size: {val/100.0:.2f}"))
+        self.global_reverb_slider.valueChanged.connect(self._rebuild_pedalboard)
 
-        self.main_layout.addLayout(self.global_effects_layout)
+        # Delay
+        self.global_delay_cb = QCheckBox("Delay")
+        self.global_delay_sec_spin = QDoubleSpinBox()
+        self.global_delay_sec_spin.setRange(0.0, 5.0)
+        self.global_delay_sec_spin.setSingleStep(0.05)
+        self.global_delay_sec_spin.setDecimals(2)
+        self.global_delay_sec_spin.setValue(0.3)
+        self.global_delay_fb_slider = QSlider(Qt.Orientation.Horizontal)
+        self.global_delay_fb_slider.setRange(0, 95)
+        self.global_delay_fb_slider.setValue(40)
+        self.global_delay_fb_label = QLabel(f"Feedback: {self.global_delay_fb_slider.value()/100.0:.2f}")
+
+        delay_layout = QHBoxLayout()
+        delay_layout.addWidget(QLabel("Delay (s):"))
+        delay_layout.addWidget(self.global_delay_sec_spin)
+
+        self.global_effects_layout.addWidget(self.global_delay_cb, 1, 0)
+        self.global_effects_layout.addLayout(delay_layout, 1, 1)
+
+        delay_fb_layout = QHBoxLayout()
+        delay_fb_layout.addWidget(self.global_delay_fb_slider)
+        delay_fb_layout.addWidget(self.global_delay_fb_label)
+        self.global_effects_layout.addLayout(delay_fb_layout, 1, 2)
+
+        self.global_delay_cb.toggled.connect(self._rebuild_pedalboard)
+        self.global_delay_sec_spin.valueChanged.connect(self._rebuild_pedalboard)
+        self.global_delay_fb_slider.valueChanged.connect(lambda val: self.global_delay_fb_label.setText(f"Feedback: {val/100.0:.2f}"))
+        self.global_delay_fb_slider.valueChanged.connect(self._rebuild_pedalboard)
+
+        # Distortion
+        self.global_distortion_cb = QCheckBox("Distortion")
+        self.global_distortion_slider = QSlider(Qt.Orientation.Horizontal)
+        self.global_distortion_slider.setRange(0, 500)
+        self.global_distortion_slider.setValue(250)
+        self.global_distortion_label = QLabel(f"Drive (dB): {self.global_distortion_slider.value()/10.0:.1f}")
+
+        self.global_effects_layout.addWidget(self.global_distortion_cb, 2, 0)
+        self.global_effects_layout.addWidget(self.global_distortion_slider, 2, 1)
+        self.global_effects_layout.addWidget(self.global_distortion_label, 2, 2)
+
+        self.global_distortion_cb.toggled.connect(self._rebuild_pedalboard)
+        self.global_distortion_slider.valueChanged.connect(lambda val: self.global_distortion_label.setText(f"Drive (dB): {val/10.0:.1f}"))
+        self.global_distortion_slider.valueChanged.connect(self._rebuild_pedalboard)
+
+        # Bitcrush
+        self.global_bitcrush_cb = QCheckBox("Bitcrush")
+        self.global_bitcrush_spin = QSpinBox()
+        self.global_bitcrush_spin.setRange(1, 32)
+        self.global_bitcrush_spin.setValue(8)
+
+        bc_layout = QHBoxLayout()
+        bc_layout.addWidget(QLabel("Bit Depth:"))
+        bc_layout.addWidget(self.global_bitcrush_spin)
+
+        self.global_effects_layout.addWidget(self.global_bitcrush_cb, 3, 0)
+        self.global_effects_layout.addLayout(bc_layout, 3, 1)
+
+        self.global_bitcrush_cb.toggled.connect(self._rebuild_pedalboard)
+        self.global_bitcrush_spin.valueChanged.connect(self._rebuild_pedalboard)
+
+        # VST3 Plugin
+        self.global_vst3_cb = QCheckBox("VST3 Plugin")
+        self.global_vst3_path_label = QLabel("No Plugin Loaded")
+        self.global_vst3_load_btn = QPushButton("Load VST3...")
+        self.global_vst3_show_gui_btn = QPushButton("Show GUI")
+        self.global_vst3_show_gui_btn.setEnabled(False)
+
+        self.global_vst3_path = ""
+        self.global_vst3_state = None
+        self.global_vst3_plugin_instance = None # Used for keeping state when disabled
+
+        vst3_layout = QHBoxLayout()
+        vst3_layout.addWidget(self.global_vst3_path_label)
+        vst3_layout.addWidget(self.global_vst3_load_btn)
+        vst3_layout.addWidget(self.global_vst3_show_gui_btn)
+
+        self.global_effects_layout.addWidget(self.global_vst3_cb, 4, 0)
+        self.global_effects_layout.addLayout(vst3_layout, 4, 1, 1, 2)
+
+        self.global_vst3_cb.toggled.connect(self._rebuild_pedalboard)
+        self.global_vst3_load_btn.clicked.connect(self.load_global_vst3)
+        self.global_vst3_show_gui_btn.clicked.connect(self.show_global_vst3_gui)
+
+        self.main_layout.addWidget(self.global_effects_group)
 
         self.main_scroll_area = QScrollArea()
         self.main_scroll_area.setWidgetResizable(True)
@@ -1608,6 +1691,83 @@ class VoiceModulatorWindow(QMainWindow):
         if button:
             button.set_active(is_turning_on)
 
+    def load_global_vst3(self):
+        dialog = QFileDialog(self)
+        dialog.setWindowTitle("Select VST3 Plugin")
+        dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
+        dialog.setNameFilter("VST3 Plugins (*.vst3)")
+
+        if dialog.exec():
+            selected_file = dialog.selectedFiles()[0]
+            self.global_vst3_path_label.setText(os.path.basename(selected_file))
+            self.global_vst3_path = selected_file
+
+            # Reset state for new plugin
+            self.global_vst3_state = None
+            self.global_vst3_plugin_instance = None
+
+            self.global_vst3_show_gui_btn.setEnabled(_AUDIO_LIBS_LOADED and pedalboard is not None)
+
+            # Optional: Test load
+            try:
+                if _AUDIO_LIBS_LOADED and pedalboard:
+                    temp_plugin = pedalboard.load_plugin(selected_file)
+                    # Use this instance to hold state even if not actively in chain
+                    self.global_vst3_plugin_instance = temp_plugin
+                    self._rebuild_pedalboard()
+            except Exception as e:
+                QMessageBox.warning(self, "Plugin Error", f"Failed to load VST3 plugin:\n{e}")
+                self.global_vst3_path_label.setText("No Plugin Loaded")
+                self.global_vst3_path = ""
+                self.global_vst3_show_gui_btn.setEnabled(False)
+
+    def show_global_vst3_gui(self):
+        if not self.global_vst3_path or not os.path.exists(self.global_vst3_path):
+            QMessageBox.warning(self, "Error", "Invalid VST3 plugin path.")
+            return
+
+        try:
+            if _AUDIO_LIBS_LOADED and pedalboard:
+                plugin = self.global_vst3_plugin_instance
+                if not plugin:
+                    plugin = pedalboard.load_plugin(self.global_vst3_path)
+                    self.global_vst3_plugin_instance = plugin
+
+                if self.global_vst3_state:
+                    try:
+                        import base64
+                        if isinstance(self.global_vst3_state, str):
+                            plugin.raw_state = base64.b64decode(self.global_vst3_state)
+                        else:
+                            plugin.raw_state = self.global_vst3_state
+                    except Exception as e:
+                        print(f"Failed to restore global VST3 state: {e}")
+
+                def _run_editor(p, main_window):
+                    try:
+                        p.show_editor()
+                        import base64
+                        state_bytes = p.raw_state
+                        if state_bytes:
+                            main_window.global_vst3_state = base64.b64encode(state_bytes).decode('utf-8')
+
+                        # Rebuild pedalboard when GUI is closed to apply new settings
+                        # Use invokeMethod to ensure it runs on main thread
+                        QMetaObject.invokeMethod(main_window, "_rebuild_pedalboard", Qt.ConnectionType.QueuedConnection)
+                    except Exception as e:
+                        print(f"Error in global VST3 editor thread: {e}")
+
+                editor_thread = threading.Thread(
+                    target=_run_editor,
+                    args=(plugin, self),
+                    daemon=True
+                )
+                editor_thread.start()
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to open global plugin GUI:\n{e}")
+
+    @Slot()
     def _rebuild_pedalboard(self, *args):
         """Reconstructs the Pedalboard chain from all currently active effects."""
         if not _AUDIO_LIBS_LOADED or not pedalboard:
@@ -1617,13 +1777,38 @@ class VoiceModulatorWindow(QMainWindow):
 
         # Add global effects
         if hasattr(self, 'global_reverb_cb') and self.global_reverb_cb.isChecked() and _pb_reverb_ok:
-            chain.append(pedalboard.Reverb(room_size=0.5))
+            room_size = self.global_reverb_slider.value() / 100.0
+            chain.append(pedalboard.Reverb(room_size=room_size))
+
         if hasattr(self, 'global_delay_cb') and self.global_delay_cb.isChecked() and _pb_delay_ok:
-            chain.append(pedalboard.Delay(delay_seconds=0.3, feedback=0.4))
+            delay_sec = self.global_delay_sec_spin.value()
+            feedback = self.global_delay_fb_slider.value() / 100.0
+            chain.append(pedalboard.Delay(delay_seconds=delay_sec, feedback=feedback))
+
         if hasattr(self, 'global_distortion_cb') and self.global_distortion_cb.isChecked() and _pb_distortion_ok:
-            chain.append(pedalboard.Distortion(drive_db=25.0))
+            drive_db = self.global_distortion_slider.value() / 10.0
+            chain.append(pedalboard.Distortion(drive_db=drive_db))
+
         if hasattr(self, 'global_bitcrush_cb') and self.global_bitcrush_cb.isChecked() and _pb_bitcrush_ok:
-            chain.append(pedalboard.Bitcrush(bit_depth=8.0))
+            bit_depth = self.global_bitcrush_spin.value()
+            chain.append(pedalboard.Bitcrush(bit_depth=bit_depth))
+
+        if hasattr(self, 'global_vst3_cb') and self.global_vst3_cb.isChecked() and self.global_vst3_path:
+             if self.global_vst3_plugin_instance:
+                 chain.append(self.global_vst3_plugin_instance)
+             else:
+                 try:
+                     plugin = pedalboard.load_plugin(self.global_vst3_path)
+                     if self.global_vst3_state:
+                         import base64
+                         if isinstance(self.global_vst3_state, str):
+                             plugin.raw_state = base64.b64decode(self.global_vst3_state)
+                         else:
+                             plugin.raw_state = self.global_vst3_state
+                     self.global_vst3_plugin_instance = plugin
+                     chain.append(plugin)
+                 except Exception as e:
+                     print(f"Error loading global VST3: {e}")
 
         # Append effects from all active sound_ids in order of insertion
         for s_id, effects_list in self._active_effects.items():
