@@ -1988,6 +1988,9 @@ class VoiceModulatorWindow(QMainWindow):
         if not _AUDIO_LIBS_LOADED or not pedalboard:
             return
 
+        if getattr(self, '_restarting_stream', False):
+            return
+
         chain = []
 
         # Add global effects dynamically
@@ -2000,34 +2003,43 @@ class VoiceModulatorWindow(QMainWindow):
         for s_id, effects_list in self._active_effects.items():
             chain.extend(effects_list)
 
+        new_board = pedalboard.Pedalboard(chain)
+
+        required_blocksize = 512
+        has_pitchshift = False
+        for plugin in new_board:
+            if _pb_pitchshift_ok and isinstance(plugin, pedalboard.PitchShift):
+                required_blocksize = 4096
+                has_pitchshift = True
+                break
+
         with self._audio_lock:
-            self._audio_board = pedalboard.Pedalboard(chain)
+            self._audio_board = new_board
 
-            # Pre-fill RubberBand's internal buffer for PitchShift
-            if self._audio_board is not None:
-                has_pitchshift = any(_pb_pitchshift_ok and isinstance(plugin, pedalboard.PitchShift) for plugin in self._audio_board)
-                if has_pitchshift:
-                    # Prime the buffer with 4 chunks of silence
-                    silence = np.zeros((1, 4096), dtype=np.float32)
-                    for _ in range(4):
-                        self._audio_board(silence, 48000, reset=False)
+        # Handle blocksize change and stream restart AFTER setting the new board
+        # so start_audio_stream can read the new board correctly.
+        if getattr(self, '_current_blocksize', 512) != required_blocksize:
+            print(f"Blocksize changing from {getattr(self, '_current_blocksize', 512)} to {required_blocksize}")
+            if self._audio_stream and self._audio_stream.active:
+                self._restarting_stream = True
+                self.stop_audio_stream()
+                self._current_blocksize = required_blocksize
+                self.start_audio_stream()
+                self._restarting_stream = False
+            else:
+                self._current_blocksize = required_blocksize
 
-        # Check if blocksize needs to be updated (e.g. PitchShift added/removed)
-        if self._audio_stream and self._audio_stream.active:
-            required_blocksize = 512
-            if self._audio_board is not None:
-                for plugin in self._audio_board:
-                    if _pb_pitchshift_ok and isinstance(plugin, pedalboard.PitchShift):
-                        required_blocksize = 4096
-                        break
-
-            if getattr(self, '_current_blocksize', 512) != required_blocksize:
-                print(f"Restarting audio stream to change blocksize to {required_blocksize}")
-                # We need to restart on the main thread, but _rebuild_pedalboard is usually called on main thread anyway
-                # But to be safe if called from background thread (like VST3), use singleShot or invokeMethod.
-                # Since _rebuild_pedalboard is a Slot and mostly invoked safely, we can stop/start here.
-                # However, to avoid deadlocks with _audio_lock during stream.stop(), we use QTimer.
-                QMetaObject.invokeMethod(self, "restart_audio_stream", Qt.ConnectionType.QueuedConnection)
+        # Pre-fill RubberBand's internal buffer for PitchShift
+        # This MUST happen after the stream has restarted to prevent the
+        # initial restart from wiping the prime (since start_audio_stream itself doesn't reset it,
+        # but conceptually it's safer to prime right before the stream callback hits it)
+        with self._audio_lock:
+            if has_pitchshift and self._audio_board is not None:
+                print("Priming PitchShift buffer...")
+                # Prime the buffer with 4 chunks of silence
+                silence = np.zeros((1, 4096), dtype=np.float32)
+                for _ in range(4):
+                    self._audio_board(silence, 48000, reset=False)
 
     def _activate_scene(self, sound_id, sound_data):
         print(f"Activating Scene: {sound_data.get('name')}")
