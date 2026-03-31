@@ -1192,7 +1192,9 @@ class VoiceModulatorWindow(QMainWindow):
         self._active_loops = {} # dict mapping sound_id to {"array": numpy_array, "index": int, "routing": str, "volume": float}
         self._active_effects = {} # dict mapping sound_id to list of pedalboard effect objects
         self._audio_lock = threading.Lock() # To protect state changes during audio callback
-        self._current_blocksize = 512 # Keep track of the active blocksize
+
+        self._pitchshift_board = None
+        self._pitchshift_buffer = np.zeros((0, 1), dtype=np.float32)
 
         if pedalboard and hasattr(pedalboard, 'Pedalboard'):
              self._audio_board = pedalboard.Pedalboard([]) # Start with an empty board for Phase 1
@@ -1280,12 +1282,6 @@ class VoiceModulatorWindow(QMainWindow):
         else:
             self.start_audio_stream()
 
-    @Slot()
-    def restart_audio_stream(self):
-        if self._audio_stream and self._audio_stream.active:
-            self.stop_audio_stream()
-            self.start_audio_stream()
-
     def start_audio_stream(self):
         if not _AUDIO_LIBS_LOADED:
             self.show_error_popup("Audio Error", "Audio libraries not loaded. Cannot start stream.")
@@ -1315,17 +1311,7 @@ class VoiceModulatorWindow(QMainWindow):
 
         try:
             # We use blocksize 512 for balance of latency and stability, 48000 Hz is standard
-            # However, plugins like PitchShift (RubberBand) need larger blocks to function correctly.
             sample_rate = 48000
-
-            blocksize = 512
-            if self._audio_board is not None:
-                for plugin in self._audio_board:
-                    if _pb_pitchshift_ok and isinstance(plugin, pedalboard.PitchShift):
-                        blocksize = 4096
-                        break
-
-            self._current_blocksize = blocksize
 
             def stream_callback(indata, outdata, frames, time, status):
                 if status:
@@ -1375,6 +1361,22 @@ class VoiceModulatorWindow(QMainWindow):
 
                         current_audio = processed.T
 
+                    # Decoupled PitchShift Processing
+                    if self._pitchshift_board is not None:
+                        # Process through decoupled PitchShift
+                        ps_processed = self._pitchshift_board(current_audio.T, sample_rate, reset=False).T
+
+                        # Accumulate in buffer
+                        self._pitchshift_buffer = np.vstack((self._pitchshift_buffer, ps_processed))
+
+                        # Drain buffer if we have enough frames
+                        if self._pitchshift_buffer.shape[0] >= frames:
+                            current_audio = self._pitchshift_buffer[:frames, :]
+                            self._pitchshift_buffer = self._pitchshift_buffer[frames:, :]
+                        else:
+                            # Not enough frames accumulated yet, output silence to avoid crash
+                            current_audio = np.zeros((frames, 1), dtype=np.float32)
+
                     # 3. Mix AFTER effects loops
                     for loop_id, loop_data in self._active_loops.items():
                         if loop_data.get('routing') == 'after':
@@ -1407,7 +1409,7 @@ class VoiceModulatorWindow(QMainWindow):
             self._audio_stream = sd.Stream(
                 device=(input_dev_idx, output_dev_idx),
                 samplerate=sample_rate,
-                blocksize=blocksize,
+                blocksize=512,
                 dtype=np.float32,
                 channels=channels,
                 callback=stream_callback
@@ -1988,58 +1990,45 @@ class VoiceModulatorWindow(QMainWindow):
         if not _AUDIO_LIBS_LOADED or not pedalboard:
             return
 
-        if getattr(self, '_restarting_stream', False):
-            return
-
         chain = []
+        pitchshift_effect = None
 
         # Add global effects dynamically
         for widget in self.global_effect_widgets:
             effect = widget.get_effect()
             if effect is not None:
-                chain.append(effect)
+                if _pb_pitchshift_ok and isinstance(effect, pedalboard.PitchShift):
+                    pitchshift_effect = effect
+                else:
+                    chain.append(effect)
 
         # Append effects from all active sound_ids in order of insertion
         for s_id, effects_list in self._active_effects.items():
-            chain.extend(effects_list)
+            for effect in effects_list:
+                if _pb_pitchshift_ok and isinstance(effect, pedalboard.PitchShift):
+                    pitchshift_effect = effect
+                else:
+                    chain.append(effect)
 
         new_board = pedalboard.Pedalboard(chain)
 
-        required_blocksize = 512
-        has_pitchshift = False
-        for plugin in new_board:
-            if _pb_pitchshift_ok and isinstance(plugin, pedalboard.PitchShift):
-                required_blocksize = 4096
-                has_pitchshift = True
-                break
+        new_pitchshift_board = None
+        if pitchshift_effect is not None:
+            # We must recreate the PitchShift effect to attach it to a new board cleanly.
+            # Using the semitones parameter of the captured PitchShift effect.
+            new_pitchshift_board = pedalboard.Pedalboard([pedalboard.PitchShift(semitones=pitchshift_effect.semitones)])
 
         with self._audio_lock:
             self._audio_board = new_board
+            self._pitchshift_board = new_pitchshift_board
+            self._pitchshift_buffer = np.zeros((0, 1), dtype=np.float32)
 
-        # Handle blocksize change and stream restart AFTER setting the new board
-        # so start_audio_stream can read the new board correctly.
-        if getattr(self, '_current_blocksize', 512) != required_blocksize:
-            print(f"Blocksize changing from {getattr(self, '_current_blocksize', 512)} to {required_blocksize}")
-            if self._audio_stream and self._audio_stream.active:
-                self._restarting_stream = True
-                self.stop_audio_stream()
-                self._current_blocksize = required_blocksize
-                self.start_audio_stream()
-                self._restarting_stream = False
-            else:
-                self._current_blocksize = required_blocksize
-
-        # Pre-fill RubberBand's internal buffer for PitchShift
-        # This MUST happen after the stream has restarted to prevent the
-        # initial restart from wiping the prime (since start_audio_stream itself doesn't reset it,
-        # but conceptually it's safer to prime right before the stream callback hits it)
-        with self._audio_lock:
-            if has_pitchshift and self._audio_board is not None:
-                print("Priming PitchShift buffer...")
-                # Prime the buffer with 4 chunks of silence
+            # Pre-fill RubberBand's internal buffer for PitchShift on its dedicated board
+            if self._pitchshift_board is not None:
+                print("Priming decoupled PitchShift buffer...")
                 silence = np.zeros((1, 4096), dtype=np.float32)
-                for _ in range(4):
-                    self._audio_board(silence, 48000, reset=False)
+                for _ in range(8):
+                    self._pitchshift_board(silence, 48000, reset=False)
 
     def _activate_scene(self, sound_id, sound_data):
         print(f"Activating Scene: {sound_data.get('name')}")
