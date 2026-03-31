@@ -154,7 +154,7 @@ class ReverbWidget(BaseEffectWidget):
         self.controls_layout.addWidget(self.label)
 
         self.slider.valueChanged.connect(self.update_label)
-        self.slider.valueChanged.connect(self.effect_changed.emit)
+        self.slider.valueChanged.connect(lambda val: self.effect_changed.emit())
 
     def update_label(self, val):
         self.label.setText(f"Room Size: {val/100.0:.2f}")
@@ -183,9 +183,9 @@ class DelayWidget(BaseEffectWidget):
         self.controls_layout.addWidget(self.fb_slider)
         self.controls_layout.addWidget(self.fb_label)
 
-        self.sec_spin.valueChanged.connect(self.effect_changed.emit)
+        self.sec_spin.valueChanged.connect(lambda val: self.effect_changed.emit())
         self.fb_slider.valueChanged.connect(self.update_label)
-        self.fb_slider.valueChanged.connect(self.effect_changed.emit)
+        self.fb_slider.valueChanged.connect(lambda val: self.effect_changed.emit())
 
     def update_label(self, val):
         self.fb_label.setText(f"Feedback: {val/100.0:.2f}")
@@ -207,7 +207,7 @@ class DistortionWidget(BaseEffectWidget):
         self.controls_layout.addWidget(self.label)
 
         self.slider.valueChanged.connect(self.update_label)
-        self.slider.valueChanged.connect(self.effect_changed.emit)
+        self.slider.valueChanged.connect(lambda val: self.effect_changed.emit())
 
     def update_label(self, val):
         self.label.setText(f"Drive (dB): {val/10.0:.1f}")
@@ -227,7 +227,7 @@ class BitcrushWidget(BaseEffectWidget):
         self.controls_layout.addWidget(self.spin)
         self.controls_layout.addStretch()
 
-        self.spin.valueChanged.connect(self.effect_changed.emit)
+        self.spin.valueChanged.connect(lambda val: self.effect_changed.emit())
 
     def get_effect(self):
         if self.is_enabled and _pb_bitcrush_ok:
@@ -246,7 +246,7 @@ class PitchShiftWidget(BaseEffectWidget):
         self.controls_layout.addWidget(self.label)
 
         self.slider.valueChanged.connect(self.update_label)
-        self.slider.valueChanged.connect(self.effect_changed.emit)
+        self.slider.valueChanged.connect(lambda val: self.effect_changed.emit())
 
     def update_label(self, val):
         self.label.setText(f"Semitones: {val}")
@@ -275,9 +275,9 @@ class ChorusWidget(BaseEffectWidget):
         self.controls_layout.addWidget(self.depth_slider)
         self.controls_layout.addWidget(self.depth_label)
 
-        self.rate_spin.valueChanged.connect(self.effect_changed.emit)
+        self.rate_spin.valueChanged.connect(lambda val: self.effect_changed.emit())
         self.depth_slider.valueChanged.connect(self.update_label)
-        self.depth_slider.valueChanged.connect(self.effect_changed.emit)
+        self.depth_slider.valueChanged.connect(lambda val: self.effect_changed.emit())
 
     def update_label(self, val):
         self.depth_label.setText(f"Depth: {val/100.0:.2f}")
@@ -351,6 +351,7 @@ class VST3Widget(BaseEffectWidget):
         # Emit signal to main window to handle background thread
         self.request_gui_show.emit(self.plugin_path, self.plugin_state, self.plugin_instance)
 
+    @Slot(str)
     def set_state(self, new_state):
         self.plugin_state = new_state
         self.effect_changed.emit()
@@ -1955,82 +1956,6 @@ class VoiceModulatorWindow(QMainWindow):
             daemon=True
         )
         editor_thread.start()
-
-    def load_global_vst3(self):
-        dialog = QFileDialog(self)
-        dialog.setWindowTitle("Select VST3 Plugin")
-        dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
-        dialog.setNameFilter("VST3 Plugins (*.vst3)")
-
-        if dialog.exec():
-            selected_file = dialog.selectedFiles()[0]
-            self.global_vst3_path_label.setText(os.path.basename(selected_file))
-            self.global_vst3_path = selected_file
-
-            # Reset state for new plugin
-            self.global_vst3_state = None
-            self.global_vst3_plugin_instance = None
-
-            self.global_vst3_show_gui_btn.setEnabled(_AUDIO_LIBS_LOADED and pedalboard is not None)
-
-            # Optional: Test load
-            try:
-                if _AUDIO_LIBS_LOADED and pedalboard:
-                    temp_plugin = pedalboard.load_plugin(selected_file)
-                    # Use this instance to hold state even if not actively in chain
-                    self.global_vst3_plugin_instance = temp_plugin
-                    self._rebuild_pedalboard()
-            except Exception as e:
-                QMessageBox.warning(self, "Plugin Error", f"Failed to load VST3 plugin:\n{e}")
-                self.global_vst3_path_label.setText("No Plugin Loaded")
-                self.global_vst3_path = ""
-                self.global_vst3_show_gui_btn.setEnabled(False)
-
-    def show_global_vst3_gui(self):
-        if not self.global_vst3_path or not os.path.exists(self.global_vst3_path):
-            QMessageBox.warning(self, "Error", "Invalid VST3 plugin path.")
-            return
-
-        try:
-            if _AUDIO_LIBS_LOADED and pedalboard:
-                plugin = self.global_vst3_plugin_instance
-                if not plugin:
-                    plugin = pedalboard.load_plugin(self.global_vst3_path)
-                    self.global_vst3_plugin_instance = plugin
-
-                if self.global_vst3_state:
-                    try:
-                        import base64
-                        if isinstance(self.global_vst3_state, str):
-                            plugin.raw_state = base64.b64decode(self.global_vst3_state)
-                        else:
-                            plugin.raw_state = self.global_vst3_state
-                    except Exception as e:
-                        print(f"Failed to restore global VST3 state: {e}")
-
-                def _run_editor(p, main_window):
-                    try:
-                        p.show_editor()
-                        import base64
-                        state_bytes = p.raw_state
-                        if state_bytes:
-                            main_window.global_vst3_state = base64.b64encode(state_bytes).decode('utf-8')
-
-                        # Rebuild pedalboard when GUI is closed to apply new settings
-                        # Use invokeMethod to ensure it runs on main thread
-                        QMetaObject.invokeMethod(main_window, "_rebuild_pedalboard", Qt.ConnectionType.QueuedConnection)
-                    except Exception as e:
-                        print(f"Error in global VST3 editor thread: {e}")
-
-                editor_thread = threading.Thread(
-                    target=_run_editor,
-                    args=(plugin, self),
-                    daemon=True
-                )
-                editor_thread.start()
-
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Failed to open global plugin GUI:\n{e}")
 
     @Slot()
     def _rebuild_pedalboard(self, *args):
