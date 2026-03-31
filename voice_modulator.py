@@ -1346,8 +1346,9 @@ class VoiceModulatorWindow(QMainWindow):
 
                     # 2. Apply Pedalboard Effects
                     if self._audio_board is not None:
-                        # Pedalboard expects (channels, frames)
-                        processed = self._audio_board(current_audio.T, sample_rate)
+                        # Pedalboard expects (channels, frames).
+                        # IMPORTANT: reset=False ensures Reverb, Delay, Chorus maintain their tails/state across chunks.
+                        processed = self._audio_board(current_audio.T, sample_rate, reset=False)
                         current_audio = processed.T
 
                     # 3. Mix AFTER effects loops
