@@ -1195,6 +1195,7 @@ class VoiceModulatorWindow(QMainWindow):
 
         self._pitchshift_board = None
         self._pitchshift_buffer = np.zeros((0, 1), dtype=np.float32)
+        self._pitchshift_in_buffer = np.zeros((0, 1), dtype=np.float32)
 
         if pedalboard and hasattr(pedalboard, 'Pedalboard'):
              self._audio_board = pedalboard.Pedalboard([]) # Start with an empty board for Phase 1
@@ -1363,11 +1364,19 @@ class VoiceModulatorWindow(QMainWindow):
 
                     # Decoupled PitchShift Processing
                     if self._pitchshift_board is not None:
-                        # Process through decoupled PitchShift
-                        ps_processed = self._pitchshift_board(current_audio.T, sample_rate, reset=False).T
+                        # Accumulate in input buffer to meet minimum blocksize requirements
+                        self._pitchshift_in_buffer = np.vstack((self._pitchshift_in_buffer, current_audio))
 
-                        # Accumulate in buffer
-                        self._pitchshift_buffer = np.vstack((self._pitchshift_buffer, ps_processed))
+                        # Process in chunks of 2048 frames
+                        while self._pitchshift_in_buffer.shape[0] >= 2048:
+                            process_chunk = self._pitchshift_in_buffer[:2048, :]
+                            self._pitchshift_in_buffer = self._pitchshift_in_buffer[2048:, :]
+
+                            # Process through decoupled PitchShift
+                            ps_processed = self._pitchshift_board(process_chunk.T, sample_rate, reset=False).T
+
+                            # Accumulate in output buffer
+                            self._pitchshift_buffer = np.vstack((self._pitchshift_buffer, ps_processed))
 
                         # Drain buffer if we have enough frames
                         if self._pitchshift_buffer.shape[0] >= frames:
@@ -2048,11 +2057,12 @@ class VoiceModulatorWindow(QMainWindow):
             self._audio_board = new_board
             self._pitchshift_board = new_pitchshift_board
             self._pitchshift_buffer = np.zeros((0, 1), dtype=np.float32)
+            self._pitchshift_in_buffer = np.zeros((0, 1), dtype=np.float32)
 
             # Pre-fill RubberBand's internal buffer for PitchShift on its dedicated board
             if self._pitchshift_board is not None:
                 print("Priming decoupled PitchShift buffer...")
-                silence = np.zeros((1, 4096), dtype=np.float32)
+                silence = np.zeros((1, 2048), dtype=np.float32)
                 for _ in range(8):
                     self._pitchshift_board(silence, 48000, reset=False)
 
