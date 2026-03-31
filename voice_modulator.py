@@ -1349,6 +1349,13 @@ class VoiceModulatorWindow(QMainWindow):
                         # Pedalboard expects (channels, frames).
                         # IMPORTANT: reset=False ensures Reverb, Delay, Chorus maintain their tails/state across chunks.
                         processed = self._audio_board(current_audio.T, sample_rate, reset=False)
+
+                        # Pedalboard plugins with internal buffering (like PitchShift)
+                        # may return fewer frames than provided initially. Pad with zeros if necessary.
+                        if processed.shape[1] < frames:
+                            pad_width = frames - processed.shape[1]
+                            processed = np.pad(processed, ((0, 0), (0, pad_width)), mode='constant')
+
                         current_audio = processed.T
 
                     # 3. Mix AFTER effects loops
