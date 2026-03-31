@@ -1324,28 +1324,23 @@ class VoiceModulatorWindow(QMainWindow):
                     # 1. Mix BEFORE effects loops
                     for loop_id, loop_data in self._active_loops.items():
                         if loop_data.get('routing') == 'before':
-                            loop_array = loop_data['array']
-                            loop_len = len(loop_array)
-                            idx = loop_data['index']
-
-                            # Grab chunk from loop
+                            audio_file = loop_data['file']
                             volume = loop_data.get('volume', 1.0)
-                            frames_filled = 0
 
-                            while frames_filled < frames:
-                                space_left_in_chunk = frames - frames_filled
-                                data_left_in_loop = loop_len - idx
+                            try:
+                                chunk = audio_file.read(frames, dtype='float32')
+                                if len(chunk) < frames:
+                                    audio_file.seek(0)
+                                    chunk2 = audio_file.read(frames - len(chunk), dtype='float32')
+                                    chunk = np.concatenate((chunk, chunk2), axis=0) if len(chunk) > 0 else chunk2
 
-                                to_copy = min(space_left_in_chunk, data_left_in_loop)
-                                current_audio[frames_filled:frames_filled+to_copy, 0] += loop_array[idx:idx+to_copy] * volume
+                                if chunk.ndim > 1 and chunk.shape[1] > 1:
+                                    chunk = chunk.mean(axis=1)
 
-                                frames_filled += to_copy
-                                idx += to_copy
-
-                                if idx >= loop_len:
-                                    idx = 0  # Loop back to beginning
-
-                            loop_data['index'] = idx
+                                if len(chunk) > 0:
+                                    current_audio[:len(chunk), 0] += chunk.flatten() * volume
+                            except Exception as e:
+                                print(f"[Audio Stream] Error reading loop (before): {e}")
 
                     # 2. Apply Pedalboard Effects
                     if self._audio_board is not None:
@@ -1380,27 +1375,23 @@ class VoiceModulatorWindow(QMainWindow):
                     # 3. Mix AFTER effects loops
                     for loop_id, loop_data in self._active_loops.items():
                         if loop_data.get('routing') == 'after':
-                            loop_array = loop_data['array']
-                            loop_len = len(loop_array)
-                            idx = loop_data['index']
-
+                            audio_file = loop_data['file']
                             volume = loop_data.get('volume', 1.0)
-                            frames_filled = 0
 
-                            while frames_filled < frames:
-                                space_left_in_chunk = frames - frames_filled
-                                data_left_in_loop = loop_len - idx
+                            try:
+                                chunk = audio_file.read(frames, dtype='float32')
+                                if len(chunk) < frames:
+                                    audio_file.seek(0)
+                                    chunk2 = audio_file.read(frames - len(chunk), dtype='float32')
+                                    chunk = np.concatenate((chunk, chunk2), axis=0) if len(chunk) > 0 else chunk2
 
-                                to_copy = min(space_left_in_chunk, data_left_in_loop)
-                                current_audio[frames_filled:frames_filled+to_copy, 0] += loop_array[idx:idx+to_copy] * volume
+                                if chunk.ndim > 1 and chunk.shape[1] > 1:
+                                    chunk = chunk.mean(axis=1)
 
-                                frames_filled += to_copy
-                                idx += to_copy
-
-                                if idx >= loop_len:
-                                    idx = 0  # Loop back to beginning
-
-                            loop_data['index'] = idx
+                                if len(chunk) > 0:
+                                    current_audio[:len(chunk), 0] += chunk.flatten() * volume
+                            except Exception as e:
+                                print(f"[Audio Stream] Error reading loop (after): {e}")
 
                     outdata[:] = current_audio
 
@@ -2038,22 +2029,18 @@ class VoiceModulatorWindow(QMainWindow):
         absolute_path = sound_data.get("absolute_path")
         if absolute_path and os.path.exists(absolute_path):
             try:
-                # Load whole file into memory, convert to mono float32
-                data, fs = sf.read(absolute_path, dtype='float32')
-                if len(data.shape) > 1:
-                    # Convert stereo to mono by averaging channels
-                    data = data.mean(axis=1)
+                # Open the file for streaming instead of loading entirely into memory
+                audio_file = sf.SoundFile(absolute_path)
 
                 with self._audio_lock:
                     self._active_loops[sound_id] = {
-                        "array": data,
-                        "index": 0,
+                        "file": audio_file,
                         "routing": sound_data.get("loop_routing", "after"),
                         "volume": sound_data.get("volume", 1.0)
                     }
-                print(f" -> Loaded loop: {len(data)} frames")
+                print(f" -> Opened loop for streaming: {absolute_path}")
             except Exception as e:
-                print(f"Error loading loop {absolute_path}: {e}")
+                print(f"Error opening loop {absolute_path}: {e}")
                 QTimer.singleShot(0, partial(self._mark_file_missing, sound_id))
 
         # 2. Add Effects to Master Chain
@@ -2103,6 +2090,11 @@ class VoiceModulatorWindow(QMainWindow):
 
         with self._audio_lock:
             if sound_id in self._active_loops:
+                if 'file' in self._active_loops[sound_id]:
+                    try:
+                        self._active_loops[sound_id]['file'].close()
+                    except Exception as e:
+                        print(f"Error closing streaming file: {e}")
                 del self._active_loops[sound_id]
 
         if sound_id in self._active_effects:
@@ -2116,6 +2108,12 @@ class VoiceModulatorWindow(QMainWindow):
 
         # Clear processing queues
         with self._audio_lock:
+            for loop_id, loop_data in self._active_loops.items():
+                if 'file' in loop_data:
+                    try:
+                        loop_data['file'].close()
+                    except Exception as e:
+                        print(f"Error closing streaming file on stop all: {e}")
             self._active_loops.clear()
 
         self._active_effects.clear()
