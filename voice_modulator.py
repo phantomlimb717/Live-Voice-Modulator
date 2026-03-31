@@ -1171,7 +1171,7 @@ class VoiceModulatorWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.config = copy.deepcopy(DEFAULT_CONFIG); self.sound_buttons = {}
+        self.load_config(); self.sound_buttons = {}
         self._pynput_listener = None
         self._current_modifiers = set()
         self._hotkey_map = {}
@@ -1575,8 +1575,34 @@ class VoiceModulatorWindow(QMainWindow):
                  print(f"Error during restore: {e}"); traceback.print_exc(); self.show_error_popup("Restore Error", f"Could not restore config from\n{filepath}\n\nError: {e}")
 
     # --- Config Handling ---
+    def load_config(self):
+        config_path = self._get_config_path()
+        if config_path and os.path.exists(config_path):
+            try:
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    loaded_config = json.load(f)
+                if isinstance(loaded_config, dict) and "sounds" in loaded_config:
+                    self.config = loaded_config
+                    temp_settings = copy.deepcopy(DEFAULT_CONFIG.get("settings", {}))
+                    temp_settings.update(self.config.get("settings", {}))
+                    self.config["settings"] = temp_settings
+                    if not any(g.get('id') == 'default' for g in self.config.get('groups', [])):
+                        self.config.setdefault('groups', []).insert(0, {"id": "default", "name": "Default"})
+                    print(f"Config loaded from: {config_path}")
+                    return
+            except Exception as e:
+                print(f"Error loading config: {e}")
+        self.config = copy.deepcopy(DEFAULT_CONFIG)
+
     def save_config(self):
-        pass # Config saving is disabled
+        config_path = self._get_config_path()
+        if not config_path: return
+        try:
+            config_to_save = self._prepare_config_for_saving()
+            with open(config_path, 'w', encoding='utf-8') as f:
+                json.dump(config_to_save, f, indent=4, ensure_ascii=False)
+        except Exception as e:
+            print(f"Error saving config: {e}")
 
     def _get_config_path(self):
         app_dir = get_script_directory()

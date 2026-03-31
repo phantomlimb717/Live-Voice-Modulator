@@ -1,7 +1,7 @@
 {
     "version": "1.0",
     "settings": {
-        "scan_interval_minutes": 15,
+        "scan_interval_minutes": 42,
         "input_device_name": "Default",
         "output_device_name": "Default",
         "stop_all_hotkey": null
