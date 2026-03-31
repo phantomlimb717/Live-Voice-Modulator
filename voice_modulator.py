@@ -2054,8 +2054,13 @@ class VoiceModulatorWindow(QMainWindow):
             if self._pitchshift_board is not None:
                 print("Priming decoupled PitchShift buffer...")
                 silence = np.zeros((1, 2048), dtype=np.float32)
-                for _ in range(8):
-                    self._pitchshift_board(silence, 48000, reset=False)
+                # Keep pushing silence until we get some output, then push a little more to build up a buffer
+                for _ in range(100):
+                    out = self._pitchshift_board(silence, 48000, reset=False)
+                    if out.shape[1] > 0:
+                        self._pitchshift_buffer = np.vstack((self._pitchshift_buffer, out.T))
+                        if self._pitchshift_buffer.shape[0] >= 4096: # let's buffer at least two chunks worth
+                            break
 
     def _activate_scene(self, sound_id, sound_data):
         print(f"Activating Scene: {sound_data.get('name')}")
