@@ -429,6 +429,8 @@ class SceneButton(QPushButton):
 
 # --- Dialog Classes ---
 class EditSoundDialog(QDialog):
+    live_update_signal = Signal(dict)
+
     def __init__(self, sound_data, groups, parent=None):
         super().__init__(parent); self.sound_data_original = sound_data; self.sound_data_edited = copy.deepcopy(sound_data); self.groups = groups
         self.setWindowTitle(f"Edit Properties: {sound_data.get('name', '')}"); self.setMinimumWidth(450)
@@ -436,6 +438,7 @@ class EditSoundDialog(QDialog):
         self.name_input = QLineEdit(self.sound_data_edited.get('name', '')); form_layout.addRow("Sound Name:", self.name_input)
         volume_layout = QHBoxLayout(); self.volume_slider = QSlider(Qt.Orientation.Horizontal); self.volume_slider.setRange(0, 150); self.volume_slider.setValue(int(self.sound_data_edited.get('volume', 1.0) * 100))
         self.volume_label = QLabel(f"{self.sound_data_edited.get('volume', 1.0):.2f}"); self.volume_slider.valueChanged.connect(lambda val: self.volume_label.setText(f"{val / 100.0:.2f}"))
+        self.volume_slider.valueChanged.connect(self._emit_live_update)
         volume_layout.addWidget(self.volume_slider); volume_layout.addWidget(self.volume_label); form_layout.addRow("Volume:", volume_layout)
 
         # Pre/Post Effect Routing
@@ -444,6 +447,7 @@ class EditSoundDialog(QDialog):
         self.routing_combo.addItem("Mix BEFORE Effects", userData="before")
         current_routing = self.sound_data_edited.get('loop_routing', 'after')
         self.routing_combo.setCurrentIndex(0 if current_routing == 'after' else 1)
+        self.routing_combo.currentIndexChanged.connect(self._emit_live_update)
         form_layout.addRow("Loop Routing:", self.routing_combo)
 
         self.group_combo = QComboBox(); current_group_index = 0
@@ -478,19 +482,20 @@ class EditSoundDialog(QDialog):
             fx_type = effect_data.get("type")
             if fx_type not in defined_effects: continue
             fx_box = QHBoxLayout(); fx_enable_cb = QCheckBox(fx_type); fx_enable_cb.setChecked(effect_data.get("enabled", False)); fx_box.addWidget(fx_enable_cb); self.effects_widgets[fx_type] = {'enable': fx_enable_cb, 'params': {}}
+            fx_enable_cb.toggled.connect(self._emit_live_update)
             params_layout = QHBoxLayout()
             if fx_type == "Reverb":
                 params_layout.addWidget(QLabel("Room Size:")); slider = QSlider(Qt.Orientation.Horizontal); slider.setRange(0, 100); slider.setValue(int(effect_data.get("params", {}).get("room_size", 0.5) * 100)); label = QLabel(f"{slider.value()/100.0:.2f}")
-                slider.valueChanged.connect(lambda val, l=label: l.setText(f"{val/100.0:.2f}")); params_layout.addWidget(slider); params_layout.addWidget(label); self.effects_widgets[fx_type]['params']['room_size'] = {'widget': slider, 'label': label}
+                slider.valueChanged.connect(lambda val, l=label: l.setText(f"{val/100.0:.2f}")); slider.sliderReleased.connect(self._emit_live_update); params_layout.addWidget(slider); params_layout.addWidget(label); self.effects_widgets[fx_type]['params']['room_size'] = {'widget': slider, 'label': label}
             elif fx_type == "Delay":
-                params_layout.addWidget(QLabel("Delay (s):")); spinbox = QDoubleSpinBox(); spinbox.setRange(0.0, 5.0); spinbox.setSingleStep(0.05); spinbox.setDecimals(2); spinbox.setValue(effect_data.get("params", {}).get("delay_seconds", 0.5)); params_layout.addWidget(spinbox); self.effects_widgets[fx_type]['params']['delay_seconds'] = {'widget': spinbox}
+                params_layout.addWidget(QLabel("Delay (s):")); spinbox = QDoubleSpinBox(); spinbox.setRange(0.0, 5.0); spinbox.setSingleStep(0.05); spinbox.setDecimals(2); spinbox.setValue(effect_data.get("params", {}).get("delay_seconds", 0.5)); spinbox.valueChanged.connect(self._emit_live_update); params_layout.addWidget(spinbox); self.effects_widgets[fx_type]['params']['delay_seconds'] = {'widget': spinbox}
                 params_layout.addWidget(QLabel("Feedback:")); slider_fb = QSlider(Qt.Orientation.Horizontal); slider_fb.setRange(0, 95); slider_fb.setValue(int(effect_data.get("params", {}).get("feedback", 0.3) * 100)); label_fb = QLabel(f"{slider_fb.value()/100.0:.2f}")
-                slider_fb.valueChanged.connect(lambda val, l=label_fb: l.setText(f"{val/100.0:.2f}")); params_layout.addWidget(slider_fb); params_layout.addWidget(label_fb); self.effects_widgets[fx_type]['params']['feedback'] = {'widget': slider_fb, 'label': label_fb}
+                slider_fb.valueChanged.connect(lambda val, l=label_fb: l.setText(f"{val/100.0:.2f}")); slider_fb.sliderReleased.connect(self._emit_live_update); params_layout.addWidget(slider_fb); params_layout.addWidget(label_fb); self.effects_widgets[fx_type]['params']['feedback'] = {'widget': slider_fb, 'label': label_fb}
             elif fx_type == "Distortion":
                 params_layout.addWidget(QLabel("Drive (dB):")); slider_drv = QSlider(Qt.Orientation.Horizontal); slider_drv.setRange(0, 500); slider_drv.setValue(int(effect_data.get("params", {}).get("drive_db", 25.0) * 10)); label_drv = QLabel(f"{slider_drv.value()/10.0:.1f}")
-                slider_drv.valueChanged.connect(lambda val, l=label_drv: l.setText(f"{val/10.0:.1f}")); params_layout.addWidget(slider_drv); params_layout.addWidget(label_drv); self.effects_widgets[fx_type]['params']['drive_db'] = {'widget': slider_drv, 'label': label_drv}
+                slider_drv.valueChanged.connect(lambda val, l=label_drv: l.setText(f"{val/10.0:.1f}")); slider_drv.sliderReleased.connect(self._emit_live_update); params_layout.addWidget(slider_drv); params_layout.addWidget(label_drv); self.effects_widgets[fx_type]['params']['drive_db'] = {'widget': slider_drv, 'label': label_drv}
             elif fx_type == "Bitcrush":
-                params_layout.addWidget(QLabel("Bit Depth:")); spinbox_bc = QSpinBox(); spinbox_bc.setRange(1, 32); spinbox_bc.setValue(int(effect_data.get("params", {}).get("bit_depth", 8.0))); params_layout.addWidget(spinbox_bc); self.effects_widgets[fx_type]['params']['bit_depth'] = {'widget': spinbox_bc}
+                params_layout.addWidget(QLabel("Bit Depth:")); spinbox_bc = QSpinBox(); spinbox_bc.setRange(1, 32); spinbox_bc.setValue(int(effect_data.get("params", {}).get("bit_depth", 8.0))); spinbox_bc.valueChanged.connect(self._emit_live_update); params_layout.addWidget(spinbox_bc); self.effects_widgets[fx_type]['params']['bit_depth'] = {'widget': spinbox_bc}
             elif fx_type == "VST3 Plugin":
                 plugin_path = effect_data.get("params", {}).get("plugin_path", "")
                 plugin_state = effect_data.get("params", {}).get("plugin_state", None)
@@ -516,11 +521,18 @@ class EditSoundDialog(QDialog):
             fx_box.addLayout(params_layout); effects_layout.addLayout(fx_box)
         self.layout.addLayout(effects_layout); self.layout.addStretch()
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel); self.button_box.accepted.connect(self.accept); self.button_box.rejected.connect(self.reject); self.layout.addWidget(self.button_box)
-    def accept(self):
-        self.sound_data_edited['name'] = self.name_input.text(); self.sound_data_edited['volume'] = round(self.volume_slider.value() / 100.0, 3); self.sound_data_edited['group_id'] = self.group_combo.currentData()
-        self.sound_data_edited['loop_routing'] = self.routing_combo.currentData()
+    @Slot()
+    def _emit_live_update(self, *args):
+        self.live_update_signal.emit(self._build_current_data())
+
+    def _build_current_data(self):
+        current_data = copy.deepcopy(self.sound_data_edited)
+        current_data['name'] = self.name_input.text()
+        current_data['volume'] = round(self.volume_slider.value() / 100.0, 3)
+        current_data['group_id'] = self.group_combo.currentData()
+        current_data['loop_routing'] = self.routing_combo.currentData()
         updated_effects = []
-        for effect_data in self.sound_data_edited.get('effects', []):
+        for effect_data in current_data.get('effects', []):
             fx_type = effect_data.get('type')
             if fx_type in self.effects_widgets:
                 widgets = self.effects_widgets[fx_type]
@@ -538,7 +550,11 @@ class EditSoundDialog(QDialog):
                 updated_effects.append(new_effect_data)
             else:
                 updated_effects.append(effect_data)
-        self.sound_data_edited['effects'] = updated_effects
+        current_data['effects'] = updated_effects
+        return current_data
+
+    def accept(self):
+        self.sound_data_edited = self._build_current_data()
         self.changes_made = (self.sound_data_edited != self.sound_data_original)
         if self.changes_made:
             self.sound_data_original.clear()
@@ -558,6 +574,7 @@ class EditSoundDialog(QDialog):
             # Re-enable the Show GUI button
             gui_btn = self.effects_widgets["VST3 Plugin"]['params']['plugin_path']['show_gui_button']
             gui_btn.setEnabled(_AUDIO_LIBS_LOADED and pedalboard is not None)
+            self._emit_live_update()
 
             # Optional: Test load it right now so we can show its UI immediately from the edit dialog
             try:
@@ -598,7 +615,7 @@ class EditSoundDialog(QDialog):
                         print(f"Failed to restore plugin state: {e}")
 
                 # show_editor() blocks the thread until closed. We must run it in a background thread.
-                def _run_editor(plugin, widget_state_dict):
+                def _run_editor(plugin, widget_state_dict, dialog_instance):
                     try:
                         plugin.show_editor()
 
@@ -608,12 +625,20 @@ class EditSoundDialog(QDialog):
                         if state_bytes:
                             # Encode as base64 string to be JSON serializable
                             widget_state_dict['current_state'] = base64.b64encode(state_bytes).decode('utf-8')
+
+                        try:
+                            # Check if dialog_instance has been garbage collected or closed in C++
+                            dialog_instance.objectName()
+                            QMetaObject.invokeMethod(dialog_instance, "_emit_live_update", Qt.ConnectionType.QueuedConnection)
+                        except RuntimeError:
+                            # The C++ object was destroyed (user closed the edit dialog before closing VST gui)
+                            pass
                     except Exception as e:
                         print(f"Error in VST3 editor thread: {e}")
 
                 editor_thread = threading.Thread(
                     target=_run_editor,
-                    args=(temp_plugin, self.effects_widgets["VST3 Plugin"]['params']['plugin_path']),
+                    args=(temp_plugin, self.effects_widgets["VST3 Plugin"]['params']['plugin_path'], self),
                     daemon=True
                 )
                 editor_thread.start()
@@ -1191,6 +1216,7 @@ class VoiceModulatorWindow(QMainWindow):
         self._active_scenes = set() # Track active sound_ids globally, decoupling from UI
         self._active_loops = {} # dict mapping sound_id to {"array": numpy_array, "index": int, "routing": str, "volume": float}
         self._active_effects = {} # dict mapping sound_id to list of pedalboard effect objects
+        self._active_preview_effects = {} # dict mapping sound_id to the last applied effects config list
         self._audio_lock = threading.Lock() # To protect state changes during audio callback
 
         self._pitchshift_board = None
@@ -2057,45 +2083,76 @@ class VoiceModulatorWindow(QMainWindow):
                 QTimer.singleShot(0, partial(self._mark_file_missing, sound_id))
 
         # 2. Add Effects to Master Chain
-        if _AUDIO_LIBS_LOADED and pedalboard:
-            scene_effects = []
-            for fx_config in sound_data.get('effects', []):
-                if not fx_config.get('enabled', False):
-                    continue
+        self._update_scene_effects(sound_id, sound_data)
 
-                fx_type = fx_config.get('type')
-                params = fx_config.get('params', {})
+    def _update_scene_effects(self, sound_id, sound_data):
+        if not _AUDIO_LIBS_LOADED or not pedalboard:
+            return
 
-                try:
-                    if fx_type == "Reverb" and _pb_reverb_ok:
-                        scene_effects.append(pedalboard.Reverb(room_size=params.get("room_size", 0.5)))
-                    elif fx_type == "Delay" and _pb_delay_ok:
-                        scene_effects.append(pedalboard.Delay(delay_seconds=params.get("delay_seconds", 0.5), feedback=params.get("feedback", 0.3)))
-                    elif fx_type == "Distortion" and _pb_distortion_ok:
-                        scene_effects.append(pedalboard.Distortion(drive_db=params.get("drive_db", 25.0)))
-                    elif fx_type == "Bitcrush" and _pb_bitcrush_ok:
-                        scene_effects.append(pedalboard.Bitcrush(bit_depth=params.get("bit_depth", 8.0)))
-                    elif fx_type == "VST3 Plugin":
-                        plugin_path = params.get("plugin_path")
-                        plugin_state = params.get("plugin_state")
-                        if plugin_path and os.path.exists(plugin_path):
-                            loaded_vst = pedalboard.load_plugin(plugin_path)
-                            if plugin_state:
-                                try:
-                                    import base64
-                                    if isinstance(plugin_state, str):
-                                        loaded_vst.raw_state = base64.b64decode(plugin_state)
-                                    else:
-                                        loaded_vst.raw_state = plugin_state
-                                except Exception as e:
-                                    print(f"Error restoring VST3 state: {e}")
-                            scene_effects.append(loaded_vst)
-                except Exception as e:
-                    print(f"Error creating effect {fx_type}: {e}")
+        scene_effects = []
+        for fx_config in sound_data.get('effects', []):
+            if not fx_config.get('enabled', False):
+                continue
 
-            if scene_effects:
-                self._active_effects[sound_id] = scene_effects
-                self._rebuild_pedalboard()
+            fx_type = fx_config.get('type')
+            params = fx_config.get('params', {})
+
+            try:
+                if fx_type == "Reverb" and _pb_reverb_ok:
+                    scene_effects.append(pedalboard.Reverb(room_size=params.get("room_size", 0.5)))
+                elif fx_type == "Delay" and _pb_delay_ok:
+                    scene_effects.append(pedalboard.Delay(delay_seconds=params.get("delay_seconds", 0.5), feedback=params.get("feedback", 0.3)))
+                elif fx_type == "Distortion" and _pb_distortion_ok:
+                    scene_effects.append(pedalboard.Distortion(drive_db=params.get("drive_db", 25.0)))
+                elif fx_type == "Bitcrush" and _pb_bitcrush_ok:
+                    scene_effects.append(pedalboard.Bitcrush(bit_depth=params.get("bit_depth", 8.0)))
+                elif fx_type == "VST3 Plugin":
+                    plugin_path = params.get("plugin_path")
+                    plugin_state = params.get("plugin_state")
+                    if plugin_path and os.path.exists(plugin_path):
+                        loaded_vst = pedalboard.load_plugin(plugin_path)
+                        if plugin_state:
+                            try:
+                                import base64
+                                if isinstance(plugin_state, str):
+                                    loaded_vst.raw_state = base64.b64decode(plugin_state)
+                                else:
+                                    loaded_vst.raw_state = plugin_state
+                            except Exception as e:
+                                print(f"Error restoring VST3 state: {e}")
+                        scene_effects.append(loaded_vst)
+            except Exception as e:
+                print(f"Error creating effect {fx_type}: {e}")
+
+        if scene_effects:
+            self._active_effects[sound_id] = scene_effects
+        else:
+            if sound_id in self._active_effects:
+                del self._active_effects[sound_id]
+
+        self._rebuild_pedalboard()
+
+    def _apply_live_scene_update(self, sound_id, updated_data):
+        with self._audio_lock:
+            if sound_id in self._active_loops:
+                self._active_loops[sound_id]['volume'] = updated_data.get('volume', 1.0)
+                self._active_loops[sound_id]['routing'] = updated_data.get('loop_routing', 'after')
+
+        if sound_id in self._active_scenes:
+            # Check if effects actually changed to avoid expensive rebuilds on just volume/routing changes
+            old_effects = self._active_preview_effects.get(sound_id)
+            # If not in our preview cache, fallback to checking the original data config
+            if old_effects is None:
+                original_sound_data = self.find_sound_by_id(sound_id)
+                old_effects = original_sound_data.get('effects', []) if original_sound_data else []
+
+            new_effects = updated_data.get('effects', [])
+
+            if old_effects != new_effects:
+                self._update_scene_effects(sound_id, updated_data)
+                # Store the currently applied preview config so the next volume change
+                # does not needlessly rebuild the pedalboard chain, without corrupting the app config
+                self._active_preview_effects[sound_id] = copy.deepcopy(new_effects)
 
     def _deactivate_scene(self, sound_id):
         print(f"Deactivating Scene: {sound_id}")
@@ -2104,6 +2161,9 @@ class VoiceModulatorWindow(QMainWindow):
         with self._audio_lock:
             if sound_id in self._active_loops:
                 del self._active_loops[sound_id]
+
+        if sound_id in self._active_preview_effects:
+            del self._active_preview_effects[sound_id]
 
         if sound_id in self._active_effects:
             del self._active_effects[sound_id]
@@ -2118,6 +2178,7 @@ class VoiceModulatorWindow(QMainWindow):
         with self._audio_lock:
             self._active_loops.clear()
 
+        self._active_preview_effects.clear()
         self._active_effects.clear()
         self._rebuild_pedalboard()
 
@@ -2492,6 +2553,8 @@ class VoiceModulatorWindow(QMainWindow):
         self.dismiss_current_popup();
         # Pass a copy for editing, original is updated by dialog on accept+changes
         dialog = EditSoundDialog(sound_data, self.config.get('groups', []), self)
+        dialog.live_update_signal.connect(lambda updated_data: self._apply_live_scene_update(sound_data['id'], updated_data))
+
         if dialog.exec() == QDialog.DialogCode.Accepted:
             updated_data = dialog.get_updated_sound_data() # Returns original dict if changed, else None
             if updated_data:
@@ -2500,8 +2563,12 @@ class VoiceModulatorWindow(QMainWindow):
                 self.save_config();
                 self.populate_groups_and_sounds(); # Refresh UI (group might have changed)
                 # Hotkeys don't change here, no need to re-setup unless group logic affects it? No.
-            else: print("Edit cancelled or no changes made.")
-        else: print("Edit properties dialog cancelled.")
+            else:
+                print("Edit cancelled or no changes made.")
+                self._apply_live_scene_update(sound_data['id'], sound_data)
+        else:
+            print("Edit properties dialog cancelled.")
+            self._apply_live_scene_update(sound_data['id'], sound_data)
 
     @Slot(dict) # Make it a slot
     def open_assign_hotkey_dialog(self, sound_data):
