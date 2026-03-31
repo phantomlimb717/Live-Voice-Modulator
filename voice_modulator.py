@@ -892,14 +892,14 @@ class VoiceModulatorWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.config = {}; self.sound_buttons = {}
+        self.config = copy.deepcopy(DEFAULT_CONFIG); self.sound_buttons = {}
         self._pynput_listener = None
         self._current_modifiers = set()
         self._hotkey_map = {}
         self._stop_all_hotkey_str = None
         self._file_check_event = None; self._current_popup = None
         self._tk_root = None
-        self.load_config()
+        self._resolve_sound_paths()
         self.setWindowTitle("Live Voice Modulator v1.0"); self.setGeometry(100, 100, 800, 600); self.setMinimumSize(600, 400)
         self._setup_ui()
         self.apply_dark_theme()
@@ -932,9 +932,30 @@ class VoiceModulatorWindow(QMainWindow):
         file_menu.addAction(settings_action); file_menu.addSeparator(); file_menu.addAction(backup_action); file_menu.addAction(restore_action); file_menu.addSeparator(); file_menu.addAction(exit_action)
         edit_menu = self.menu_bar.addMenu("&Edit"); manage_groups_action = QAction("Manage &Groups", self); manage_groups_action.triggered.connect(self.open_manage_groups_dialog); edit_menu.addAction(manage_groups_action)
         self.central_widget = QWidget(); self.setCentralWidget(self.central_widget); self.main_layout = QVBoxLayout(self.central_widget); self.main_layout.setContentsMargins(5, 5, 5, 5); self.main_layout.setSpacing(5)
-        top_bar_layout = QHBoxLayout(); self.search_input = QLineEdit(); self.search_input.setPlaceholderText("Search scenes/effects...")
-        self.search_input.textChanged.connect(self.filter_sounds); self.add_button = QPushButton("Add Scene/Effect"); self.add_button.setFixedWidth(120); self.add_button.clicked.connect(self.add_sound_dialog)
+        top_bar_layout = QHBoxLayout(); self.search_input = QLineEdit(); self.search_input.setPlaceholderText("Search sounds...")
+        self.search_input.textChanged.connect(self.filter_sounds); self.add_button = QPushButton("Add Sound"); self.add_button.setFixedWidth(120); self.add_button.clicked.connect(self.add_sound_dialog)
         top_bar_layout.addWidget(self.search_input); top_bar_layout.addWidget(self.add_button); self.main_layout.addLayout(top_bar_layout)
+
+        # Global Effects
+        self.global_effects_layout = QHBoxLayout()
+        self.global_reverb_cb = QCheckBox("Reverb")
+        self.global_delay_cb = QCheckBox("Delay")
+        self.global_distortion_cb = QCheckBox("Distortion")
+        self.global_bitcrush_cb = QCheckBox("Bitcrush")
+
+        self.global_effects_layout.addWidget(QLabel("Global Effects:"))
+        self.global_effects_layout.addWidget(self.global_reverb_cb)
+        self.global_effects_layout.addWidget(self.global_delay_cb)
+        self.global_effects_layout.addWidget(self.global_distortion_cb)
+        self.global_effects_layout.addWidget(self.global_bitcrush_cb)
+        self.global_effects_layout.addStretch()
+
+        self.global_reverb_cb.toggled.connect(self._rebuild_pedalboard)
+        self.global_delay_cb.toggled.connect(self._rebuild_pedalboard)
+        self.global_distortion_cb.toggled.connect(self._rebuild_pedalboard)
+        self.global_bitcrush_cb.toggled.connect(self._rebuild_pedalboard)
+
+        self.main_layout.addLayout(self.global_effects_layout)
 
         self.main_scroll_area = QScrollArea()
         self.main_scroll_area.setWidgetResizable(True)
@@ -1236,54 +1257,8 @@ class VoiceModulatorWindow(QMainWindow):
                  print(f"Error during restore: {e}"); traceback.print_exc(); self.show_error_popup("Restore Error", f"Could not restore config from\n{filepath}\n\nError: {e}")
 
     # --- Config Handling ---
-    def load_config(self):
-        print("Loading configuration...")
-        config_path = self._get_config_path(); loaded_config = None
-        if not config_path: print("ERROR: Config path could not be determined."); loaded_config = copy.deepcopy(DEFAULT_CONFIG)
-        else:
-            try:
-                with open(config_path, 'r', encoding='utf-8') as f: loaded_config = json.load(f)
-                print(f"Config loaded successfully from {config_path}")
-            except FileNotFoundError:
-                print(f"Config file not found at {config_path}. Using default."); loaded_config = copy.deepcopy(DEFAULT_CONFIG)
-                try: # Attempt to save the default config if it didn't exist
-                    os.makedirs(os.path.dirname(config_path), exist_ok=True)
-                    with open(config_path, 'w', encoding='utf-8') as f: json.dump(loaded_config, f, indent=4, ensure_ascii=False)
-                    print("Saved default config file.")
-                except Exception as e_save: print(f"Error saving initial default config: {e_save}");
-            except json.JSONDecodeError as e: print(f"Error decoding JSON from {config_path}: {e}. Using default."); loaded_config = copy.deepcopy(DEFAULT_CONFIG)
-            except Exception as e: print(f"Error loading config from {config_path}: {e}. Using default."); loaded_config = copy.deepcopy(DEFAULT_CONFIG)
-
-        # Ensure essential keys exist and merge settings with defaults
-        loaded_config.setdefault("settings", copy.deepcopy(DEFAULT_CONFIG["settings"]))
-        loaded_config.setdefault("groups", copy.deepcopy(DEFAULT_CONFIG["groups"]))
-        loaded_config.setdefault("sounds", copy.deepcopy(DEFAULT_CONFIG["sounds"]))
-
-        # Ensure all default settings keys are present
-        default_settings = DEFAULT_CONFIG.get("settings", {})
-        current_settings = loaded_config.get("settings", {})
-        for key, default_value in default_settings.items():
-            current_settings.setdefault(key, default_value)
-        loaded_config["settings"] = current_settings
-
-        # Ensure default group exists
-        if not any(g.get('id') == 'default' for g in loaded_config.get('groups', [])):
-            loaded_config.setdefault('groups', []).insert(0, {"id": "default", "name": "Default"})
-
-        self.config = loaded_config;
-        self._resolve_sound_paths() # Resolve paths after loading
-
     def save_config(self):
-        if not self.config: return
-        print("Saving configuration..."); config_path = self._get_config_path()
-        if not config_path: print("ERROR: Cannot save config, path unknown."); return
-        try:
-            config_to_save = self._prepare_config_for_saving()
-            os.makedirs(os.path.dirname(config_path), exist_ok=True)
-            with open(config_path, 'w', encoding='utf-8') as f: json.dump(config_to_save, f, indent=4, ensure_ascii=False)
-            print(f"Config saved successfully to {config_path}")
-        except PermissionError: print(f"ERROR: Permission denied saving config to {config_path}"); self.update_status(f"Error: Permission denied saving config!")
-        except Exception as e: print(f"Error saving config: {e}"); traceback.print_exc(); self.update_status(f"Error: Could not save config! {e}")
+        pass # Config saving is disabled
 
     def _get_config_path(self):
         app_dir = get_script_directory()
@@ -1458,19 +1433,11 @@ class VoiceModulatorWindow(QMainWindow):
                             "loop_routing": "after",
                             "effects": []
                         }
-                        # Add default effect structures if pedalboard is loaded
-                        if _AUDIO_LIBS_LOADED and pedalboard:
-                            if _pb_reverb_ok: new_sound_data["effects"].append({"type": "Reverb", "enabled": False, "params": {"room_size": 0.5}})
-                            if _pb_delay_ok: new_sound_data["effects"].append({"type": "Delay", "enabled": False, "params": {"delay_seconds": 0.3, "feedback": 0.4}})
-                            if _pb_distortion_ok: new_sound_data["effects"].append({"type": "Distortion", "enabled": False, "params": {"drive_db": 25.0}})
-                            if _pb_bitcrush_ok: new_sound_data["effects"].append({"type": "Bitcrush", "enabled": False, "params": {"bit_depth": 8.0}})
-
                         self.config.setdefault("sounds", []).append(new_sound_data); added_count += 1
                     except Exception as e: print(f"Error processing file {file_path}: {e}"); traceback.print_exc(); self.show_error_popup("Add Sound Error", f"Could not process file:\n{os.path.basename(file_path)}\n\nError: {e}")
 
                 if added_count > 0:
                     self._resolve_sound_paths(); # Resolve paths for newly added sounds
-                    self.save_config();
                     self.populate_groups_and_sounds(); # Refresh UI
                     self.setup_hotkeys(); # Update hotkey map if needed (though unlikely here)
                     self.update_status(f"Added {added_count} sound(s).")
@@ -1641,12 +1608,23 @@ class VoiceModulatorWindow(QMainWindow):
         if button:
             button.set_active(is_turning_on)
 
-    def _rebuild_pedalboard(self):
+    def _rebuild_pedalboard(self, *args):
         """Reconstructs the Pedalboard chain from all currently active effects."""
         if not _AUDIO_LIBS_LOADED or not pedalboard:
             return
 
         chain = []
+
+        # Add global effects
+        if hasattr(self, 'global_reverb_cb') and self.global_reverb_cb.isChecked() and _pb_reverb_ok:
+            chain.append(pedalboard.Reverb(room_size=0.5))
+        if hasattr(self, 'global_delay_cb') and self.global_delay_cb.isChecked() and _pb_delay_ok:
+            chain.append(pedalboard.Delay(delay_seconds=0.3, feedback=0.4))
+        if hasattr(self, 'global_distortion_cb') and self.global_distortion_cb.isChecked() and _pb_distortion_ok:
+            chain.append(pedalboard.Distortion(drive_db=25.0))
+        if hasattr(self, 'global_bitcrush_cb') and self.global_bitcrush_cb.isChecked() and _pb_bitcrush_ok:
+            chain.append(pedalboard.Bitcrush(bit_depth=8.0))
+
         # Append effects from all active sound_ids in order of insertion
         for s_id, effects_list in self._active_effects.items():
             chain.extend(effects_list)
