@@ -1190,7 +1190,6 @@ class VoiceModulatorWindow(QMainWindow):
         # Real-time processing state
         self._active_scenes = set() # Track active sound_ids globally, decoupling from UI
         self._active_loops = {} # dict mapping sound_id to {"array": numpy_array, "index": int, "routing": str, "volume": float}
-        self._active_effects = {} # dict mapping sound_id to list of pedalboard effect objects
         self._audio_lock = threading.Lock() # To protect state changes during audio callback
 
         self._pitchshift_board = None
@@ -2002,14 +2001,6 @@ class VoiceModulatorWindow(QMainWindow):
                 else:
                     chain.append(effect)
 
-        # Append effects from all active sound_ids in order of insertion
-        for s_id, effects_list in self._active_effects.items():
-            for effect in effects_list:
-                if _pb_pitchshift_ok and isinstance(effect, pedalboard.PitchShift):
-                    pitchshift_effect = effect
-                else:
-                    chain.append(effect)
-
         new_board = pedalboard.Pedalboard(chain)
 
         new_pitchshift_board = None
@@ -2034,31 +2025,9 @@ class VoiceModulatorWindow(QMainWindow):
         print(f"Activating Scene: {sound_data.get('name')}")
         self._active_scenes.add(sound_id)
 
-        # 1. Load Audio Loop if available
-        absolute_path = sound_data.get("absolute_path")
-        if absolute_path and os.path.exists(absolute_path):
-            try:
-                # Load whole file into memory, convert to mono float32
-                data, fs = sf.read(absolute_path, dtype='float32')
-                if len(data.shape) > 1:
-                    # Convert stereo to mono by averaging channels
-                    data = data.mean(axis=1)
-
-                with self._audio_lock:
-                    self._active_loops[sound_id] = {
-                        "array": data,
-                        "index": 0,
-                        "routing": sound_data.get("loop_routing", "after"),
-                        "volume": sound_data.get("volume", 1.0)
-                    }
-                print(f" -> Loaded loop: {len(data)} frames")
-            except Exception as e:
-                print(f"Error loading loop {absolute_path}: {e}")
-                QTimer.singleShot(0, partial(self._mark_file_missing, sound_id))
-
-        # 2. Add Effects to Master Chain
+        # 1. Build Scene Effects (Local Chain)
+        scene_effects = []
         if _AUDIO_LIBS_LOADED and pedalboard:
-            scene_effects = []
             for fx_config in sound_data.get('effects', []):
                 if not fx_config.get('enabled', False):
                     continue
@@ -2093,9 +2062,39 @@ class VoiceModulatorWindow(QMainWindow):
                 except Exception as e:
                     print(f"Error creating effect {fx_type}: {e}")
 
-            if scene_effects:
-                self._active_effects[sound_id] = scene_effects
-                self._rebuild_pedalboard()
+        # 2. Load and Pre-process Audio Loop if available
+        absolute_path = sound_data.get("absolute_path")
+        if absolute_path and os.path.exists(absolute_path):
+            try:
+                # Load whole file into memory, convert to mono float32
+                data, fs = sf.read(absolute_path, dtype='float32')
+                if len(data.shape) > 1:
+                    # Convert stereo to mono by averaging channels
+                    data = data.mean(axis=1)
+
+                # Pre-process loop with scene effects if any
+                if scene_effects and _AUDIO_LIBS_LOADED and pedalboard:
+                    local_board = pedalboard.Pedalboard(scene_effects)
+                    print(f" -> Applying scene effects to loop: {len(scene_effects)} effects")
+                    # pedalboard expects shape (channels, frames) and outputs shape (channels, frames)
+                    processed = local_board(data.reshape(1, -1), fs, reset=False)
+                    if len(processed.shape) > 1 and processed.shape[0] > 1:
+                        # Mix down stereo to mono (e.g., from Reverb)
+                        data = processed.mean(axis=0)
+                    else:
+                        data = processed.flatten()
+
+                with self._audio_lock:
+                    self._active_loops[sound_id] = {
+                        "array": data,
+                        "index": 0,
+                        "routing": sound_data.get("loop_routing", "after"),
+                        "volume": sound_data.get("volume", 1.0)
+                    }
+                print(f" -> Loaded loop: {len(data)} frames")
+            except Exception as e:
+                print(f"Error loading loop {absolute_path}: {e}")
+                QTimer.singleShot(0, partial(self._mark_file_missing, sound_id))
 
     def _deactivate_scene(self, sound_id):
         print(f"Deactivating Scene: {sound_id}")
@@ -2105,10 +2104,6 @@ class VoiceModulatorWindow(QMainWindow):
             if sound_id in self._active_loops:
                 del self._active_loops[sound_id]
 
-        if sound_id in self._active_effects:
-            del self._active_effects[sound_id]
-            self._rebuild_pedalboard()
-
     @Slot()
     def deactivate_all_scenes(self):
         print("Panic / Stop All triggered.")
@@ -2117,9 +2112,6 @@ class VoiceModulatorWindow(QMainWindow):
         # Clear processing queues
         with self._audio_lock:
             self._active_loops.clear()
-
-        self._active_effects.clear()
-        self._rebuild_pedalboard()
 
         # Untoggle UI
         for btn in self.sound_buttons.values():
