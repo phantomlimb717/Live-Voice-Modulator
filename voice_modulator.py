@@ -2003,6 +2003,15 @@ class VoiceModulatorWindow(QMainWindow):
         with self._audio_lock:
             self._audio_board = pedalboard.Pedalboard(chain)
 
+            # Pre-fill RubberBand's internal buffer for PitchShift
+            if self._audio_board is not None:
+                has_pitchshift = any(_pb_pitchshift_ok and isinstance(plugin, pedalboard.PitchShift) for plugin in self._audio_board)
+                if has_pitchshift:
+                    # Prime the buffer with 4 chunks of silence
+                    silence = np.zeros((1, 4096), dtype=np.float32)
+                    for _ in range(4):
+                        self._audio_board(silence, 48000, reset=False)
+
         # Check if blocksize needs to be updated (e.g. PitchShift added/removed)
         if self._audio_stream and self._audio_stream.active:
             required_blocksize = 512
