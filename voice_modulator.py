@@ -48,6 +48,10 @@ try:
         _pb_bitcrush_ok = hasattr(pedalboard, 'Bitcrush')
         _pb_pitchshift_ok = hasattr(pedalboard, 'PitchShift')
         _pb_chorus_ok = hasattr(pedalboard, 'Chorus')
+        _pb_highpass_ok = hasattr(pedalboard, 'HighpassFilter')
+        _pb_lowpass_ok = hasattr(pedalboard, 'LowpassFilter')
+        _pb_compressor_ok = hasattr(pedalboard, 'Compressor')
+        _pb_noisegate_ok = hasattr(pedalboard, 'NoiseGate')
     except ImportError as pe:
         print(f"ERROR: Failed to import from pedalboard: {pe}. Effects disabled.")
         pedalboard = None
@@ -57,6 +61,10 @@ try:
         _pb_bitcrush_ok = False
         _pb_pitchshift_ok = False
         _pb_chorus_ok = False
+        _pb_highpass_ok = False
+        _pb_lowpass_ok = False
+        _pb_compressor_ok = False
+        _pb_noisegate_ok = False
     except Exception as pe_other:
         print(f"ERROR: Unexpected error importing pedalboard: {pe_other}. Effects disabled.")
         pedalboard = None
@@ -66,6 +74,10 @@ try:
         _pb_bitcrush_ok = False
         _pb_pitchshift_ok = False
         _pb_chorus_ok = False
+        _pb_highpass_ok = False
+        _pb_lowpass_ok = False
+        _pb_compressor_ok = False
+        _pb_noisegate_ok = False
     _AUDIO_LIBS_LOADED = True
     if pedalboard and not hasattr(pedalboard, 'Pedalboard'):
          print("ERROR: Critical 'Pedalboard' class missing from pedalboard library. Effects disabled.")
@@ -76,6 +88,10 @@ except ImportError as e:
      _pb_delay_ok = False
      _pb_distortion_ok = False
      _pb_bitcrush_ok = False
+     _pb_highpass_ok = False
+     _pb_lowpass_ok = False
+     _pb_compressor_ok = False
+     _pb_noisegate_ok = False
 
 # --- Hotkeys (Pynput) ---
 _HOTKEY_LIB_LOADED = False
@@ -287,6 +303,104 @@ class ChorusWidget(BaseEffectWidget):
             return pedalboard.Chorus(rate_hz=self.rate_spin.value(), depth=self.depth_slider.value() / 100.0)
         return None
 
+class HighpassFilterWidget(BaseEffectWidget):
+    def __init__(self, parent=None):
+        super().__init__("Highpass Filter", parent)
+        self.controls_layout.addWidget(QLabel("Cutoff (Hz):"))
+        self.spin = QSpinBox()
+        self.spin.setRange(20, 20000)
+        self.spin.setValue(2000)
+        self.controls_layout.addWidget(self.spin)
+        self.controls_layout.addStretch()
+
+        self.spin.valueChanged.connect(lambda val: self.effect_changed.emit())
+
+    def get_effect(self):
+        if self.is_enabled and _pb_highpass_ok:
+            return pedalboard.HighpassFilter(cutoff_frequency_hz=self.spin.value())
+        return None
+
+class LowpassFilterWidget(BaseEffectWidget):
+    def __init__(self, parent=None):
+        super().__init__("Lowpass Filter", parent)
+        self.controls_layout.addWidget(QLabel("Cutoff (Hz):"))
+        self.spin = QSpinBox()
+        self.spin.setRange(20, 20000)
+        self.spin.setValue(500)
+        self.controls_layout.addWidget(self.spin)
+        self.controls_layout.addStretch()
+
+        self.spin.valueChanged.connect(lambda val: self.effect_changed.emit())
+
+    def get_effect(self):
+        if self.is_enabled and _pb_lowpass_ok:
+            return pedalboard.LowpassFilter(cutoff_frequency_hz=self.spin.value())
+        return None
+
+class CompressorWidget(BaseEffectWidget):
+    def __init__(self, parent=None):
+        super().__init__("Compressor", parent)
+
+        self.controls_layout.addWidget(QLabel("Threshold (dB):"))
+        self.thresh_slider = QSlider(Qt.Orientation.Horizontal)
+        self.thresh_slider.setRange(-100, 0)
+        self.thresh_slider.setValue(-20)
+        self.thresh_label = QLabel(f"{self.thresh_slider.value()} dB")
+        self.controls_layout.addWidget(self.thresh_slider)
+        self.controls_layout.addWidget(self.thresh_label)
+
+        self.controls_layout.addWidget(QLabel("Ratio:"))
+        self.ratio_spin = QDoubleSpinBox()
+        self.ratio_spin.setRange(1.0, 50.0)
+        self.ratio_spin.setSingleStep(1.0)
+        self.ratio_spin.setDecimals(1)
+        self.ratio_spin.setValue(4.0)
+        self.controls_layout.addWidget(self.ratio_spin)
+
+        self.thresh_slider.valueChanged.connect(self.update_label)
+        self.thresh_slider.valueChanged.connect(lambda val: self.effect_changed.emit())
+        self.ratio_spin.valueChanged.connect(lambda val: self.effect_changed.emit())
+
+    def update_label(self, val):
+        self.thresh_label.setText(f"{val} dB")
+
+    def get_effect(self):
+        if self.is_enabled and _pb_compressor_ok:
+            return pedalboard.Compressor(threshold_db=self.thresh_slider.value(), ratio=self.ratio_spin.value())
+        return None
+
+class NoiseGateWidget(BaseEffectWidget):
+    def __init__(self, parent=None):
+        super().__init__("Noise Gate", parent)
+
+        self.controls_layout.addWidget(QLabel("Threshold (dB):"))
+        self.thresh_slider = QSlider(Qt.Orientation.Horizontal)
+        self.thresh_slider.setRange(-100, 0)
+        self.thresh_slider.setValue(-60)
+        self.thresh_label = QLabel(f"{self.thresh_slider.value()} dB")
+        self.controls_layout.addWidget(self.thresh_slider)
+        self.controls_layout.addWidget(self.thresh_label)
+
+        self.controls_layout.addWidget(QLabel("Ratio:"))
+        self.ratio_spin = QDoubleSpinBox()
+        self.ratio_spin.setRange(1.0, 50.0)
+        self.ratio_spin.setSingleStep(1.0)
+        self.ratio_spin.setDecimals(1)
+        self.ratio_spin.setValue(10.0)
+        self.controls_layout.addWidget(self.ratio_spin)
+
+        self.thresh_slider.valueChanged.connect(self.update_label)
+        self.thresh_slider.valueChanged.connect(lambda val: self.effect_changed.emit())
+        self.ratio_spin.valueChanged.connect(lambda val: self.effect_changed.emit())
+
+    def update_label(self, val):
+        self.thresh_label.setText(f"{val} dB")
+
+    def get_effect(self):
+        if self.is_enabled and _pb_noisegate_ok:
+            return pedalboard.NoiseGate(threshold_db=self.thresh_slider.value(), ratio=self.ratio_spin.value())
+        return None
+
 class VST3Widget(BaseEffectWidget):
     request_gui_show = Signal(str, object, object)
 
@@ -458,6 +572,10 @@ class EditSoundDialog(QDialog):
             if _pb_delay_ok: defined_effects.append("Delay")
             if _pb_distortion_ok: defined_effects.append("Distortion")
             if _pb_bitcrush_ok: defined_effects.append("Bitcrush")
+            if _pb_highpass_ok: defined_effects.append("Highpass Filter")
+            if _pb_lowpass_ok: defined_effects.append("Lowpass Filter")
+            if _pb_compressor_ok: defined_effects.append("Compressor")
+            if _pb_noisegate_ok: defined_effects.append("Noise Gate")
             defined_effects.append("VST3 Plugin")
         current_effects_list = self.sound_data_edited.get('effects', [])
         current_effects_map = {fx.get('type'): fx for fx in current_effects_list}
@@ -471,6 +589,10 @@ class EditSoundDialog(QDialog):
                 elif fx_type == "Delay": default_params = {"delay_seconds": 0.3, "feedback": 0.4}
                 elif fx_type == "Distortion": default_params = {"drive_db": 25.0}
                 elif fx_type == "Bitcrush": default_params = {"bit_depth": 8.0}
+                elif fx_type == "Highpass Filter": default_params = {"cutoff_frequency_hz": 2000.0}
+                elif fx_type == "Lowpass Filter": default_params = {"cutoff_frequency_hz": 500.0}
+                elif fx_type == "Compressor": default_params = {"threshold_db": -20.0, "ratio": 4.0}
+                elif fx_type == "Noise Gate": default_params = {"threshold_db": -60.0, "ratio": 10.0}
                 elif fx_type == "VST3 Plugin": default_params = {"plugin_path": ""}
                 updated_effects_list.append({"type": fx_type, "enabled": False, "params": default_params})
         self.sound_data_edited['effects'] = updated_effects_list
@@ -491,6 +613,18 @@ class EditSoundDialog(QDialog):
                 slider_drv.valueChanged.connect(lambda val, l=label_drv: l.setText(f"{val/10.0:.1f}")); params_layout.addWidget(slider_drv); params_layout.addWidget(label_drv); self.effects_widgets[fx_type]['params']['drive_db'] = {'widget': slider_drv, 'label': label_drv}
             elif fx_type == "Bitcrush":
                 params_layout.addWidget(QLabel("Bit Depth:")); spinbox_bc = QSpinBox(); spinbox_bc.setRange(1, 32); spinbox_bc.setValue(int(effect_data.get("params", {}).get("bit_depth", 8.0))); params_layout.addWidget(spinbox_bc); self.effects_widgets[fx_type]['params']['bit_depth'] = {'widget': spinbox_bc}
+            elif fx_type == "Highpass Filter":
+                params_layout.addWidget(QLabel("Cutoff (Hz):")); spinbox_hp = QSpinBox(); spinbox_hp.setRange(20, 20000); spinbox_hp.setValue(int(effect_data.get("params", {}).get("cutoff_frequency_hz", 2000.0))); params_layout.addWidget(spinbox_hp); self.effects_widgets[fx_type]['params']['cutoff_frequency_hz'] = {'widget': spinbox_hp}
+            elif fx_type == "Lowpass Filter":
+                params_layout.addWidget(QLabel("Cutoff (Hz):")); spinbox_lp = QSpinBox(); spinbox_lp.setRange(20, 20000); spinbox_lp.setValue(int(effect_data.get("params", {}).get("cutoff_frequency_hz", 500.0))); params_layout.addWidget(spinbox_lp); self.effects_widgets[fx_type]['params']['cutoff_frequency_hz'] = {'widget': spinbox_lp}
+            elif fx_type == "Compressor":
+                params_layout.addWidget(QLabel("Threshold (dB):")); slider_comp = QSlider(Qt.Orientation.Horizontal); slider_comp.setRange(-100, 0); slider_comp.setValue(int(effect_data.get("params", {}).get("threshold_db", -20.0))); label_comp = QLabel(f"{slider_comp.value()} dB")
+                slider_comp.valueChanged.connect(lambda val, l=label_comp: l.setText(f"{val} dB")); params_layout.addWidget(slider_comp); params_layout.addWidget(label_comp); self.effects_widgets[fx_type]['params']['threshold_db'] = {'widget': slider_comp, 'label': label_comp}
+                params_layout.addWidget(QLabel("Ratio:")); spinbox_ratio_comp = QDoubleSpinBox(); spinbox_ratio_comp.setRange(1.0, 50.0); spinbox_ratio_comp.setSingleStep(1.0); spinbox_ratio_comp.setDecimals(1); spinbox_ratio_comp.setValue(effect_data.get("params", {}).get("ratio", 4.0)); params_layout.addWidget(spinbox_ratio_comp); self.effects_widgets[fx_type]['params']['ratio'] = {'widget': spinbox_ratio_comp}
+            elif fx_type == "Noise Gate":
+                params_layout.addWidget(QLabel("Threshold (dB):")); slider_ng = QSlider(Qt.Orientation.Horizontal); slider_ng.setRange(-100, 0); slider_ng.setValue(int(effect_data.get("params", {}).get("threshold_db", -60.0))); label_ng = QLabel(f"{slider_ng.value()} dB")
+                slider_ng.valueChanged.connect(lambda val, l=label_ng: l.setText(f"{val} dB")); params_layout.addWidget(slider_ng); params_layout.addWidget(label_ng); self.effects_widgets[fx_type]['params']['threshold_db'] = {'widget': slider_ng, 'label': label_ng}
+                params_layout.addWidget(QLabel("Ratio:")); spinbox_ratio_ng = QDoubleSpinBox(); spinbox_ratio_ng.setRange(1.0, 50.0); spinbox_ratio_ng.setSingleStep(1.0); spinbox_ratio_ng.setDecimals(1); spinbox_ratio_ng.setValue(effect_data.get("params", {}).get("ratio", 10.0)); params_layout.addWidget(spinbox_ratio_ng); self.effects_widgets[fx_type]['params']['ratio'] = {'widget': spinbox_ratio_ng}
             elif fx_type == "VST3 Plugin":
                 plugin_path = effect_data.get("params", {}).get("plugin_path", "")
                 plugin_state = effect_data.get("params", {}).get("plugin_state", None)
@@ -532,6 +666,14 @@ class EditSoundDialog(QDialog):
                     new_effect_data['params']['feedback'] = round(widgets['params']['feedback']['widget'].value() / 100.0, 3)
                 elif fx_type == "Distortion": new_effect_data['params']['drive_db'] = round(widgets['params']['drive_db']['widget'].value() / 10.0, 1)
                 elif fx_type == "Bitcrush": new_effect_data['params']['bit_depth'] = float(widgets['params']['bit_depth']['widget'].value())
+                elif fx_type == "Highpass Filter": new_effect_data['params']['cutoff_frequency_hz'] = float(widgets['params']['cutoff_frequency_hz']['widget'].value())
+                elif fx_type == "Lowpass Filter": new_effect_data['params']['cutoff_frequency_hz'] = float(widgets['params']['cutoff_frequency_hz']['widget'].value())
+                elif fx_type == "Compressor":
+                    new_effect_data['params']['threshold_db'] = float(widgets['params']['threshold_db']['widget'].value())
+                    new_effect_data['params']['ratio'] = round(widgets['params']['ratio']['widget'].value(), 1)
+                elif fx_type == "Noise Gate":
+                    new_effect_data['params']['threshold_db'] = float(widgets['params']['threshold_db']['widget'].value())
+                    new_effect_data['params']['ratio'] = round(widgets['params']['ratio']['widget'].value(), 1)
                 elif fx_type == "VST3 Plugin":
                     new_effect_data['params']['plugin_path'] = widgets['params']['plugin_path']['current_path']
                     new_effect_data['params']['plugin_state'] = widgets['params']['plugin_path']['current_state']
@@ -1225,7 +1367,7 @@ class VoiceModulatorWindow(QMainWindow):
         # Add Effect Toolbar
         add_effect_layout = QHBoxLayout()
         self.effect_combo = QComboBox()
-        self.effect_combo.addItems(["Reverb", "Delay", "Distortion", "Bitcrush", "Pitch Shift", "Chorus", "VST3 Plugin"])
+        self.effect_combo.addItems(["Reverb", "Delay", "Distortion", "Bitcrush", "Pitch Shift", "Chorus", "Highpass Filter", "Lowpass Filter", "Compressor", "Noise Gate", "VST3 Plugin"])
         self.add_effect_btn = QPushButton("Add Effect")
         self.add_effect_btn.clicked.connect(self.add_global_effect)
         add_effect_layout.addWidget(self.effect_combo)
@@ -1963,6 +2105,10 @@ class VoiceModulatorWindow(QMainWindow):
         elif effect_name == "Bitcrush": widget = BitcrushWidget()
         elif effect_name == "Pitch Shift": widget = PitchShiftWidget()
         elif effect_name == "Chorus": widget = ChorusWidget()
+        elif effect_name == "Highpass Filter": widget = HighpassFilterWidget()
+        elif effect_name == "Lowpass Filter": widget = LowpassFilterWidget()
+        elif effect_name == "Compressor": widget = CompressorWidget()
+        elif effect_name == "Noise Gate": widget = NoiseGateWidget()
         elif effect_name == "VST3 Plugin":
             widget = VST3Widget()
             widget.request_gui_show.connect(self.show_dynamic_vst3_gui)
@@ -2101,6 +2247,14 @@ class VoiceModulatorWindow(QMainWindow):
                         scene_effects.append(pedalboard.Distortion(drive_db=params.get("drive_db", 25.0)))
                     elif fx_type == "Bitcrush" and _pb_bitcrush_ok:
                         scene_effects.append(pedalboard.Bitcrush(bit_depth=params.get("bit_depth", 8.0)))
+                    elif fx_type == "Highpass Filter" and _pb_highpass_ok:
+                        scene_effects.append(pedalboard.HighpassFilter(cutoff_frequency_hz=params.get("cutoff_frequency_hz", 2000.0)))
+                    elif fx_type == "Lowpass Filter" and _pb_lowpass_ok:
+                        scene_effects.append(pedalboard.LowpassFilter(cutoff_frequency_hz=params.get("cutoff_frequency_hz", 500.0)))
+                    elif fx_type == "Compressor" and _pb_compressor_ok:
+                        scene_effects.append(pedalboard.Compressor(threshold_db=params.get("threshold_db", -20.0), ratio=params.get("ratio", 4.0)))
+                    elif fx_type == "Noise Gate" and _pb_noisegate_ok:
+                        scene_effects.append(pedalboard.NoiseGate(threshold_db=params.get("threshold_db", -60.0), ratio=params.get("ratio", 10.0)))
                     elif fx_type == "VST3 Plugin":
                         plugin_path = params.get("plugin_path")
                         plugin_state = params.get("plugin_state")
